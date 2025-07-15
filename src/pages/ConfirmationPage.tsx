@@ -7,13 +7,6 @@ import {
   Typography,
   Button,
   TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Alert,
   Stack,
@@ -33,10 +26,9 @@ import {
   PersonAdd,
   Edit,
   Warning,
-  AccessTime,
 } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
-import { OcrResult, PackagingRecord, MachineOperationRecord, TimeSlot } from '@/types';
+import { OcrResult, PackagingRecord, MachineOperationRecord } from '@/types';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { useMasterData } from '@/hooks/useMasterData';
 
@@ -432,7 +424,7 @@ const ConfirmationPage: React.FC = () => {
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ja">
               <DatePicker
                 label="作業日"
-                value={dayjs(editedData.ヘッダー.作業日)}
+                value={editedData.ヘッダー.作業日 ? dayjs(editedData.ヘッダー.作業日) : null}
                 onChange={(newValue: Dayjs | null) => {
                   if (newValue) {
                     updateHeader('作業日', newValue.format('YYYY/MM/DD'));
@@ -470,7 +462,7 @@ const ConfirmationPage: React.FC = () => {
               <Autocomplete
                 options={masterData.products}
                 value={editedData.ヘッダー.商品名}
-                onChange={(event, newValue) => {
+                onChange={(_, newValue) => {
                   updateHeader('商品名', newValue || '');
                 }}
                 renderInput={(params) => (
@@ -572,7 +564,7 @@ const ConfirmationPage: React.FC = () => {
                     <Autocomplete
                       options={masterData.employees}
                       value={worker.氏名}
-                      onChange={(event, newValue) => {
+                      onChange={(_, newValue) => {
                         updatePackagingRecord(index, '氏名', newValue || '');
                       }}
                       renderInput={(params) => (
@@ -799,7 +791,7 @@ const ConfirmationPage: React.FC = () => {
                     <Autocomplete
                       options={masterData.employees}
                       value={operation.氏名}
-                      onChange={(event, newValue) => {
+                      onChange={(_, newValue) => {
                         updateMachineRecord(index, '氏名', newValue || '');
                       }}
                       renderInput={(params) => (

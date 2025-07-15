@@ -275,7 +275,7 @@ export class GoogleSheetsService {
     console.log(`📅 作業日: ${ocrResult.ヘッダー.作業日}`);
 
     // 作業日から適切な個人シートを検索
-    const personalSheetName = await this.findPersonalSheet(workerName, ocrResult.ヘッダー.作業日);
+    const personalSheetName = await this.findPersonalSheet(workerName, ocrResult.ヘッダー.作業日!);
     
     if (!personalSheetName) {
       console.log(`❌ 個人シートが見つかりません: ${workerName}`);
@@ -314,7 +314,7 @@ export class GoogleSheetsService {
   ): Promise<void> {
     try {
       // 作業日を正規化（M/D形式）
-      const workDate = this.normalizeDate(ocrResult.ヘッダー.作業日);
+      const workDate = this.normalizeDate(ocrResult.ヘッダー.作業日!);
       console.log(`📋 シート「${sheetName}」への保存処理開始`);
       console.log(`📅 正規化された作業日: ${workDate}`);
       
@@ -427,7 +427,7 @@ export class GoogleSheetsService {
       console.log(`📊 A列データ取得完了: ${values.length}行`);
       
       // すべてのA列の値をログ出力（デバッグ用）
-      values.forEach((row, index) => {
+      values.forEach((row: any[], index: number) => {
         if (row[0]) {
           console.log(`  A${index + 1}: "${row[0]}" ${row[0] === workDate ? '🎯 一致!' : ''}`);
         }
@@ -516,7 +516,7 @@ export class GoogleSheetsService {
     ocrResult: OcrResult, 
     packagingRecord: any, 
     machineRecord: any, 
-    workDate: string
+    _workDate: string
   ): Promise<(string | number)[]> {
     // 既存行のデータを取得
     const existingData = await this.getCurrentRowData(sheetName, existingRowIndex);
