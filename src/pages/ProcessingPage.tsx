@@ -59,6 +59,12 @@ const ProcessingPage: React.FC = () => {
         setProgress(95);
         const correctedResult = await DataCorrectionService.correctOcrResult(ocrResult);
         
+        // デフォルトの作業日を今日の日付に設定
+        if (!correctedResult.ヘッダー.作業日) {
+          const today = new Date();
+          correctedResult.ヘッダー.作業日 = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+        }
+        
         setProgress(100);
         setStatusMessage('処理完了！');
         setOcrResult(correctedResult);

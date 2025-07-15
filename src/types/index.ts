@@ -1,6 +1,6 @@
 // ヘッダー情報の型定義
 export interface HeaderInfo {
-  作業日: string;
+  作業日?: string; // OCRで読み取らないため、オプショナルに
   工場名: string;
   商品名: string;
   作業時間: string;
@@ -23,7 +23,7 @@ export interface TimeSlot {
   終了時刻: string;
 }
 
-// 作業者記録の型定義
+// 包装作業記録の型定義
 export interface PackagingRecord {
   氏名: string;
   開始時刻: string;
@@ -58,7 +58,7 @@ export interface MachineOperationRecord {
 // OCR結果の型定義
 export interface OcrResult {
   ヘッダー: HeaderInfo;
-  作業者記録: PackagingRecord[];
+  包装作業記録: PackagingRecord[];
   機械操作記録: MachineOperationRecord[];
 }
 

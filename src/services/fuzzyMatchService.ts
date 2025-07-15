@@ -16,24 +16,30 @@ export class FuzzyMatchService {
   private static calculateLevenshteinDistance(str1: string, str2: string): number {
     const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
 
-    for (let i = 0; i <= str1.length; i += 1) {
+    // 初期化: 最初の行を設定
+    Array.from({ length: str1.length + 1 }, (_, i) => {
       matrix[0][i] = i;
-    }
+    });
 
-    for (let j = 0; j <= str2.length; j += 1) {
+    // 初期化: 最初の列を設定
+    Array.from({ length: str2.length + 1 }, (_, j) => {
       matrix[j][0] = j;
-    }
+    });
 
-    for (let j = 1; j <= str2.length; j += 1) {
-      for (let i = 1; i <= str1.length; i += 1) {
-        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1, // 削除
-          matrix[j - 1][i] + 1, // 挿入
-          matrix[j - 1][i - 1] + indicator, // 置換
+    // 動的プログラミングで距離を計算
+    Array.from({ length: str2.length }, (_, j) => {
+      Array.from({ length: str1.length }, (_, i) => {
+        const rowIndex = j + 1;
+        const colIndex = i + 1;
+        const indicator = str1[i] === str2[j] ? 0 : 1;
+        
+        matrix[rowIndex][colIndex] = Math.min(
+          matrix[rowIndex][colIndex - 1] + 1, // 削除
+          matrix[rowIndex - 1][colIndex] + 1, // 挿入
+          matrix[rowIndex - 1][colIndex - 1] + indicator, // 置換
         );
-      }
-    }
+      });
+    });
 
     return matrix[str2.length][str1.length];
   }
@@ -101,30 +107,32 @@ export class FuzzyMatchService {
 
     // 3. ファジーマッチング（手書き誤字対応）
     // 必ず最も近い人を返す
-    let bestMatch: MatchResult = { match: null, confidence: 0, type: 'no_match' };
-    
-    for (const candidate of candidates) {
-      // 全体での類似度
-      const fullSimilarity = this.calculateSimilarity(trimmedInput, candidate);
-      
-      // 名字での類似度も考慮
-      const candidateLastName = this.extractLastName(candidate);
-      const lastNameSimilarity = this.calculateSimilarity(inputLastName, candidateLastName);
-      
-      // より高い類似度を採用（名字の類似度を重視）
-      const similarity = Math.max(fullSimilarity, lastNameSimilarity * 0.9);
-      
-      if (similarity > bestMatch.confidence) {
-        bestMatch = { 
-          match: candidate, 
-          confidence: similarity,
-          type: 'fuzzy' 
-        };
-      }
-    }
+    const findBestFuzzyMatch = (): MatchResult => {
+      return candidates.reduce((bestMatch, candidate) => {
+        // 全体での類似度
+        const fullSimilarity = this.calculateSimilarity(trimmedInput, candidate);
+        
+        // 名字での類似度も考慮
+        const candidateLastName = this.extractLastName(candidate);
+        const lastNameSimilarity = this.calculateSimilarity(inputLastName, candidateLastName);
+        
+        // より高い類似度を採用（名字の類似度を重視）
+        const similarity = Math.max(fullSimilarity, lastNameSimilarity * 0.9);
+        
+        if (similarity > bestMatch.confidence) {
+          return { 
+            match: candidate, 
+            confidence: similarity,
+            type: 'fuzzy' 
+          };
+        }
+        
+        return bestMatch;
+      }, { match: null, confidence: 0, type: 'no_match' } as MatchResult);
+    };
 
     // 必ず最も近い人を返す（閾値なし）
-    return bestMatch;
+    return findBestFuzzyMatch();
   }
 
   /**
@@ -156,31 +164,33 @@ export class FuzzyMatchService {
 
     // 3. ファジーマッチング（手書き誤字対応）
     // 必ず最も近い商品を返す
-    let bestMatch: MatchResult = { match: null, confidence: 0, type: 'no_match' };
-    
-    for (const candidate of candidates) {
-      // 通常の類似度
-      const regularSimilarity = this.calculateSimilarity(trimmedInput, candidate);
-      
-      // カタカナの濁音・半濁音を正規化して比較
-      const normalizedInput = this.normalizeKatakana(trimmedInput);
-      const normalizedCandidate = this.normalizeKatakana(candidate);
-      const normalizedSimilarity = this.calculateSimilarity(normalizedInput, normalizedCandidate);
-      
-      // より高い類似度を採用
-      const similarity = Math.max(regularSimilarity, normalizedSimilarity);
-      
-      if (similarity > bestMatch.confidence) {
-        bestMatch = { 
-          match: candidate, 
-          confidence: similarity,
-          type: 'fuzzy' 
-        };
-      }
-    }
+    const findBestProductFuzzyMatch = (): MatchResult => {
+      return candidates.reduce((bestMatch, candidate) => {
+        // 通常の類似度
+        const regularSimilarity = this.calculateSimilarity(trimmedInput, candidate);
+        
+        // カタカナの濁音・半濁音を正規化して比較
+        const normalizedInput = this.normalizeKatakana(trimmedInput);
+        const normalizedCandidate = this.normalizeKatakana(candidate);
+        const normalizedSimilarity = this.calculateSimilarity(normalizedInput, normalizedCandidate);
+        
+        // より高い類似度を採用
+        const similarity = Math.max(regularSimilarity, normalizedSimilarity);
+        
+        if (similarity > bestMatch.confidence) {
+          return { 
+            match: candidate, 
+            confidence: similarity,
+            type: 'fuzzy' 
+          };
+        }
+        
+        return bestMatch;
+      }, { match: null, confidence: 0, type: 'no_match' } as MatchResult);
+    };
 
     // 必ず最も近い商品を返す（閾値なし）
-    return bestMatch;
+    return findBestProductFuzzyMatch();
   }
 
   /**

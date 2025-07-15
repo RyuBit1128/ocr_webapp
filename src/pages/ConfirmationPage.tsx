@@ -20,6 +20,10 @@ import {
   Chip,
   Autocomplete,
 } from '@mui/material';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs, { Dayjs } from 'dayjs';
+import 'dayjs/locale/ja';
 import {
   CheckCircle,
   Save,
@@ -61,15 +65,15 @@ const ConfirmationPage: React.FC = () => {
     }
   };
 
-  // 時刻リストの初期化
-  const initializeTimeSlots = (record: PackagingRecord | MachineOperationRecord): (PackagingRecord | MachineOperationRecord) => {
+  // 時刻リストの初期化（すべてのプロパティを保持）
+  const initializeTimeSlots = (record: any): any => {
     if (!record.時刻リスト) {
       return {
-        ...record,
+        ...record, // すべてのプロパティ（nameError, confidence等）を保持
         時刻リスト: [{ 開始時刻: record.開始時刻, 終了時刻: record.終了時刻 }]
       };
     }
-    return record;
+    return { ...record }; // すべてのプロパティを保持してコピー
   };
 
   // OCR結果がない場合はカメラページに戻る
@@ -80,12 +84,30 @@ const ConfirmationPage: React.FC = () => {
     }
     setCurrentStep(3);
     
-    // 時刻リストを初期化してディープコピー
+    // 開始時刻・終了時刻が両方nullまたは空のレコードを除外し、時刻リストを初期化
+    const filterEmptyRecords = (records: any[]) => 
+      records.filter(record => record.開始時刻 || record.終了時刻);
+    
+    // 先に時刻リストを初期化してから空レコードを除外（nameErrorプロパティを保持するため）
     const initializedData = {
       ...ocrResult,
-      作業者記録: (ocrResult.作業者記録 || []).map(initializeTimeSlots),
-      機械操作記録: (ocrResult.機械操作記録 || []).map(initializeTimeSlots),
+      包装作業記録: filterEmptyRecords((ocrResult.包装作業記録 || []).map(initializeTimeSlots)),
+      機械操作記録: filterEmptyRecords((ocrResult.機械操作記録 || []).map(initializeTimeSlots)),
     };
+    
+    // デバッグ用：nameErrorの確認
+    console.log('🔍 読み取り結果確認画面でのnameError確認:');
+    initializedData.包装作業記録?.forEach((record: any, index: number) => {
+      if (record.nameError) {
+        console.log(`  包装作業記録[${index}]: ${record.氏名} - nameError: ${record.nameError}`);
+      }
+    });
+    initializedData.機械操作記録?.forEach((record: any, index: number) => {
+      if (record.nameError) {
+        console.log(`  機械操作記録[${index}]: ${record.氏名} - nameError: ${record.nameError}`);
+      }
+    });
+    
     setEditedData(initializedData);
   }, [ocrResult, navigate, setCurrentStep]);
 
@@ -105,33 +127,33 @@ const ConfirmationPage: React.FC = () => {
     setHasChanges(true);
   };
 
-  // 作業者記録の更新
+  // 包装作業記録の更新
   const updatePackagingRecord = (index: number, field: keyof PackagingRecord, value: any) => {
-    const newRecords = [...editedData.作業者記録];
+    const newRecords = [...editedData.包装作業記録];
     newRecords[index] = {
       ...newRecords[index],
       [field]: value,
     };
     setEditedData({
       ...editedData,
-      作業者記録: newRecords,
+      包装作業記録: newRecords,
     });
     setHasChanges(true);
   };
 
-  // 作業者記録の削除
+  // 包装作業記録の削除
   const deletePackagingRecord = (index: number) => {
-    const newRecords = editedData.作業者記録.filter((_, i) => i !== index);
+    const newRecords = editedData.包装作業記録.filter((_, i) => i !== index);
     setEditedData({
       ...editedData,
-      作業者記録: newRecords,
+      包装作業記録: newRecords,
     });
     setHasChanges(true);
   };
 
-  // 作業者記録の時刻スロット追加
+  // 包装作業記録の時刻スロット追加
   const addPackagingTimeSlot = (index: number) => {
-    const newRecords = [...editedData.作業者記録];
+    const newRecords = [...editedData.包装作業記録];
     const record = newRecords[index];
     if (!record.時刻リスト) {
       record.時刻リスト = [{ 開始時刻: record.開始時刻, 終了時刻: record.終了時刻 }];
@@ -139,14 +161,14 @@ const ConfirmationPage: React.FC = () => {
     record.時刻リスト.push({ 開始時刻: '8:00', 終了時刻: '17:00' });
     setEditedData({
       ...editedData,
-      作業者記録: newRecords,
+      包装作業記録: newRecords,
     });
     setHasChanges(true);
   };
 
-  // 作業者記録の時刻スロット削除
+  // 包装作業記録の時刻スロット削除
   const deletePackagingTimeSlot = (recordIndex: number, timeSlotIndex: number) => {
-    const newRecords = [...editedData.作業者記録];
+    const newRecords = [...editedData.包装作業記録];
     const record = newRecords[recordIndex];
     if (record.時刻リスト && record.時刻リスト.length > 1) {
       record.時刻リスト.splice(timeSlotIndex, 1);
@@ -156,14 +178,14 @@ const ConfirmationPage: React.FC = () => {
     }
     setEditedData({
       ...editedData,
-      作業者記録: newRecords,
+      包装作業記録: newRecords,
     });
     setHasChanges(true);
   };
 
-  // 作業者記録の時刻スロット更新
+  // 包装作業記録の時刻スロット更新
   const updatePackagingTimeSlot = (recordIndex: number, timeSlotIndex: number, field: '開始時刻' | '終了時刻', value: string) => {
-    const newRecords = [...editedData.作業者記録];
+    const newRecords = [...editedData.包装作業記録];
     const record = newRecords[recordIndex];
     if (record.時刻リスト) {
       record.時刻リスト[timeSlotIndex][field] = value;
@@ -174,12 +196,12 @@ const ConfirmationPage: React.FC = () => {
     }
     setEditedData({
       ...editedData,
-      作業者記録: newRecords,
+      包装作業記録: newRecords,
     });
     setHasChanges(true);
   };
 
-  // 作業者記録の追加
+  // 包装作業記録の追加
   const addPackagingRecord = () => {
     const newRecord: PackagingRecord = {
       氏名: '',
@@ -191,7 +213,7 @@ const ConfirmationPage: React.FC = () => {
     };
     setEditedData({
       ...editedData,
-      作業者記録: [...editedData.作業者記録, newRecord],
+      包装作業記録: [...editedData.包装作業記録, newRecord],
     });
     setHasChanges(true);
   };
@@ -296,7 +318,7 @@ const ConfirmationPage: React.FC = () => {
   ) => {
     if (recordType === 'packaging') {
       updatePackagingRecord(index, '休憩', {
-        ...editedData.作業者記録[index].休憩,
+        ...editedData.包装作業記録[index].休憩,
         [breakType]: value,
       });
     } else {
@@ -314,8 +336,8 @@ const ConfirmationPage: React.FC = () => {
     // バリデーションチェック
     const hasProductError = (editedData.ヘッダー as any).productError;
     const hasNameErrors = [
-      ...editedData.作業者記録.map(r => (r as any).nameError),
-      ...editedData.機械操作記録.map(r => (r as any).nameError)
+      ...editedData.包装作業記録.map(r => r.nameError),
+      ...editedData.機械操作記録.map(r => r.nameError)
     ].some(error => error);
 
     if (hasProductError || hasNameErrors) {
@@ -407,19 +429,30 @@ const ConfirmationPage: React.FC = () => {
             基本情報
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-            <TextField
-              label="作業日"
-              value={editedData.ヘッダー.作業日}
-              onChange={(e) => updateHeader('作業日', e.target.value)}
-              fullWidth
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-root': {
-                  height: '40px',
-                  fontSize: '14px',
-                }
-              }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ja">
+              <DatePicker
+                label="作業日"
+                value={dayjs(editedData.ヘッダー.作業日)}
+                onChange={(newValue: Dayjs | null) => {
+                  if (newValue) {
+                    updateHeader('作業日', newValue.format('YYYY/MM/DD'));
+                  }
+                }}
+                format="YYYY/MM/DD"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    variant: "outlined",
+                    sx: {
+                      '& .MuiInputBase-root': {
+                        height: '40px',
+                        fontSize: '14px',
+                      }
+                    }
+                  }
+                }}
+              />
+            </LocalizationProvider>
             <TextField
               label="工場名"
               value={editedData.ヘッダー.工場名}
@@ -499,12 +532,12 @@ const ConfirmationPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 作業者記録 */}
+      {/* 包装作業記録 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-              👥 作業者記録
+              👥 包装作業記録
             </Typography>
             <Button
               variant="outlined"
@@ -517,7 +550,7 @@ const ConfirmationPage: React.FC = () => {
           </Box>
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {editedData.作業者記録.map((worker, index) => (
+            {editedData.包装作業記録.map((worker, index) => (
               <Box
                 key={index}
                 sx={{
@@ -546,8 +579,8 @@ const ConfirmationPage: React.FC = () => {
                         <TextField
                           {...params}
                           variant="outlined"
-                          error={!worker.氏名 || (worker as any).nameError}
-                          helperText={(worker as any).nameError ? 'スプレッドシートに登録されていない氏名です' : ''}
+                          error={!worker.氏名 || worker.nameError}
+                          helperText=''
                           sx={{
                             '& .MuiInputBase-root': {
                               fontSize: '12px',
@@ -570,7 +603,7 @@ const ConfirmationPage: React.FC = () => {
                       <Chip
                         label={`${Math.round((worker.confidence || 0) * 100)}%`}
                         size="small"
-                        color={(worker as any).nameError ? 'error' : 
+                        color={worker.nameError ? 'error' : 
                                worker.confidence && worker.confidence >= 0.9 ? 'success' : 'warning'}
                         sx={{ height: '18px', fontSize: '10px' }}
                       />
@@ -773,8 +806,8 @@ const ConfirmationPage: React.FC = () => {
                         <TextField
                           {...params}
                           variant="outlined"
-                          error={!operation.氏名 || (operation as any).nameError}
-                          helperText={(operation as any).nameError ? 'スプレッドシートに登録されていない氏名です' : ''}
+                          error={!operation.氏名 || operation.nameError}
+                          helperText=''
                           sx={{
                             '& .MuiInputBase-root': {
                               fontSize: '12px',
@@ -797,7 +830,7 @@ const ConfirmationPage: React.FC = () => {
                       <Chip
                         label={`${Math.round((operation.confidence || 0) * 100)}%`}
                         size="small"
-                        color={(operation as any).nameError ? 'error' : 
+                        color={operation.nameError ? 'error' : 
                                operation.confidence && operation.confidence >= 0.9 ? 'success' : 'warning'}
                         sx={{ height: '18px', fontSize: '10px' }}
                       />

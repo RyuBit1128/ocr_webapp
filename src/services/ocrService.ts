@@ -21,15 +21,19 @@ export class OpenAIOcrService {
         
         // 最大サイズを制限（長辺1600px以下）
         const maxDimension = 1600;
-        let { width, height } = img;
+        const originalWidth = img.width;
+        const originalHeight = img.height;
         
-        if (width > height && width > maxDimension) {
-          height = (height * maxDimension) / width;
-          width = maxDimension;
-        } else if (height > maxDimension) {
-          width = (width * maxDimension) / height;
-          height = maxDimension;
-        }
+        const calculateDimensions = (w: number, h: number) => {
+          if (w > h && w > maxDimension) {
+            return { width: maxDimension, height: (h * maxDimension) / w };
+          } else if (h > maxDimension) {
+            return { width: (w * maxDimension) / h, height: maxDimension };
+          }
+          return { width: w, height: h };
+        };
+        
+        const { width, height } = calculateDimensions(originalWidth, originalHeight);
         
         canvas.width = width;
         canvas.height = height;
@@ -40,15 +44,18 @@ export class OpenAIOcrService {
         ctx.drawImage(img, 0, 0, width, height);
         
         // JPEG品質を調整してファイルサイズを制限
-        let quality = 0.9;
-        let compressedData = canvas.toDataURL('image/jpeg', quality);
+        const compressWithQuality = (currentQuality: number): string => {
+          const data = canvas.toDataURL('image/jpeg', currentQuality);
+          const maxSize = maxSizeKB * 1024 * 4/3;
+          
+          if (data.length <= maxSize || currentQuality <= 0.3) {
+            return data;
+          }
+          
+          return compressWithQuality(currentQuality - 0.1);
+        };
         
-        // ファイルサイズが大きすぎる場合は品質を下げる
-        while (compressedData.length > maxSizeKB * 1024 * 4/3 && quality > 0.3) {
-          quality -= 0.1;
-          compressedData = canvas.toDataURL('image/jpeg', quality);
-        }
-        
+        const compressedData = compressWithQuality(0.9);
         resolve(compressedData);
       };
       img.src = imageData;
@@ -66,10 +73,9 @@ export class OpenAIOcrService {
       onProgress?.(10, '画像を準備中...');
       
       // 画像データの形式を確認・変換
-      let processedImageData = imageData;
-      if (!imageData.startsWith('data:image/')) {
-        processedImageData = `data:image/jpeg;base64,${imageData}`;
-      }
+      const processedImageData = imageData.startsWith('data:image/') 
+        ? imageData 
+        : `data:image/jpeg;base64,${imageData}`;
 
       // 画像を圧縮
       onProgress?.(20, '画像を最適化中...');
@@ -136,21 +142,24 @@ export class OpenAIOcrService {
       onProgress?.(90, 'データを解析中...');
 
       // JSONレスポンスを解析
-      let ocrResult: OcrResult;
-      try {
-        // JSONブロックを抽出（```json ... ``` の場合に対応）
-        const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-        const jsonString = jsonMatch ? jsonMatch[1] : content;
-        
-        ocrResult = JSON.parse(jsonString.trim());
-      } catch (parseError) {
-        console.error('JSON解析エラー:', parseError);
-        console.error('レスポンス内容:', content);
-        throw new Error('OCR結果の解析に失敗しました。画像が不鮮明な可能性があります。');
-      }
+      const parseOcrResult = (): OcrResult => {
+        try {
+          // JSONブロックを抽出（```json ... ``` の場合に対応）
+          const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
+          const jsonString = jsonMatch ? jsonMatch[1] : content;
+          
+          return JSON.parse(jsonString.trim());
+        } catch (parseError) {
+          console.error('JSON解析エラー:', parseError);
+          console.error('レスポンス内容:', content);
+          throw new Error('OCR結果の解析に失敗しました。画像が不鮮明な可能性があります。');
+        }
+      };
+      
+      const ocrResult = parseOcrResult();
 
       // レスポンス形式の検証
-      if (!ocrResult.ヘッダー || !ocrResult.作業者記録) {
+      if (!ocrResult.ヘッダー || !ocrResult.包装作業記録) {
         throw new Error('OCR結果の形式が正しくありません。もう一度撮影してください。');
       }
 
@@ -175,9 +184,9 @@ export class OpenAIOcrService {
       console.log(`  商品名: ${ocrResult.ヘッダー.商品名}`);
       console.log(`  作業時間: ${ocrResult.ヘッダー.作業時間}`);
       
-      console.log('\n👥 作業者記録:');
-      if (ocrResult.作業者記録 && ocrResult.作業者記録.length > 0) {
-        ocrResult.作業者記録.forEach((record, index) => {
+      console.log('\n👥 包装作業記録:');
+      if (ocrResult.包装作業記録 && ocrResult.包装作業記録.length > 0) {
+        ocrResult.包装作業記録.forEach((record, index) => {
           console.log(`  ${index + 1}. ${record.氏名}`);
           console.log(`     開始時刻: ${record.開始時刻}`);
           console.log(`     終了時刻: ${record.終了時刻}`);
@@ -219,8 +228,8 @@ export class OpenAIOcrService {
         console.log(`  商品名: ${(ocrResult.ヘッダー as any).originalProductName} → ${ocrResult.ヘッダー.商品名} (${Math.round(((ocrResult.ヘッダー as any).productConfidence || 0) * 100)}%)`);
       }
       
-      // 作業者記録の補正情報
-      (ocrResult.作業者記録 || []).forEach((record, index) => {
+      // 包装作業記録の補正情報
+      (ocrResult.包装作業記録 || []).forEach((record, index) => {
         if (record.originalName) {
           console.log(`  作業者${index + 1}: ${record.originalName} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
         }

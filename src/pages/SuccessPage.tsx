@@ -82,7 +82,7 @@ const SuccessPage: React.FC = () => {
               ✅ 基本情報を抽出しました
             </Typography>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              ✅ 作業者記録を処理しました
+              ✅ 包装作業記録を処理しました
             </Typography>
             <Typography variant="body2" sx={{ mb: 1 }}>
               ✅ 機械操作記録を処理しました

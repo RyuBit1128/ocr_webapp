@@ -14,13 +14,14 @@ export class DataCorrectionService {
     
     console.log('🔧 データ補正開始');
     console.log(`📊 マスターデータ: 従業員${masterData.employees.length}名, 商品${masterData.products.length}種類`);
+    console.log('👥 マスターデータ従業員一覧:', masterData.employees);
     
     // ヘッダー情報の補正
     const correctedHeader = await this.correctHeader(ocrResult.ヘッダー, masterData.products);
     
-    // 作業者記録の補正
+    // 包装作業記録の補正
     const correctedPackaging = await this.correctPackagingRecords(
-      ocrResult.作業者記録 || [],
+      ocrResult.包装作業記録 || [],
       masterData.employees
     );
     
@@ -32,7 +33,7 @@ export class DataCorrectionService {
     
     const correctedResult = {
       ヘッダー: correctedHeader,
-      作業者記録: correctedPackaging,
+      包装作業記録: correctedPackaging,
       機械操作記録: correctedMachine
     };
     
@@ -46,22 +47,22 @@ export class DataCorrectionService {
       console.log(`📦 商品名補正: ${correctedHeader.originalProductName} → ${correctedHeader.商品名} (${Math.round((correctedHeader.productConfidence || 0) * 100)}%)`);
     }
     
-    // 作業者の補正結果
-    console.log('\n👥 作業者名補正:');
+    // 包装作業者の補正結果
+    console.log('\n👥 包装作業者名補正:');
     correctedPackaging.forEach((record, index) => {
-      if (record.originalName) {
-        const confidenceColor = (record.confidence || 0) >= 0.9 ? '🟢' : (record.confidence || 0) >= 0.5 ? '🟡' : '🔴';
-        console.log(`  ${index + 1}. ${record.originalName} → ${record.氏名} ${confidenceColor}(${Math.round((record.confidence || 0) * 100)}%)`);
-      }
+      // すべての記録を表示（originalNameの有無に関係なく）
+      const confidenceColor = (record.confidence || 0) >= 0.9 ? '🟢' : (record.confidence || 0) >= 0.5 ? '🟡' : '🔴';
+      const originalName = record.originalName || record.氏名;
+      console.log(`  ${index + 1}. ${originalName} → ${record.氏名} ${confidenceColor}(${Math.round((record.confidence || 0) * 100)}%)`);
     });
     
     // 機械操作者の補正結果
     console.log('\n⚙️ 機械操作者名補正:');
     correctedMachine.forEach((record, index) => {
-      if (record.originalName) {
-        const confidenceColor = (record.confidence || 0) >= 0.9 ? '🟢' : (record.confidence || 0) >= 0.5 ? '🟡' : '🔴';
-        console.log(`  ${index + 1}. ${record.originalName} → ${record.氏名} ${confidenceColor}(${Math.round((record.confidence || 0) * 100)}%)`);
-      }
+      // すべての記録を表示（originalNameの有無に関係なく）
+      const confidenceColor = (record.confidence || 0) >= 0.9 ? '🟢' : (record.confidence || 0) >= 0.5 ? '🟡' : '🔴';
+      const originalName = record.originalName || record.氏名;
+      console.log(`  ${index + 1}. ${originalName} → ${record.氏名} ${confidenceColor}(${Math.round((record.confidence || 0) * 100)}%)`);
     });
     
     console.log('========================');
@@ -91,7 +92,7 @@ export class DataCorrectionService {
         }
         
         // 信頼度が低い場合はエラーフラグを設定
-        if (productMatch.confidence < 0.5) {
+        if (productMatch.confidence < 0.4) {
           correctedHeader.productError = true;
         }
       }
@@ -101,7 +102,7 @@ export class DataCorrectionService {
   }
 
   /**
-   * 作業者記録の補正
+   * 包装作業記録の補正
    */
   private static async correctPackagingRecords(
     records: PackagingRecord[],
@@ -122,14 +123,13 @@ export class DataCorrectionService {
           correctedRecord.matchType = nameMatch.type;
           correctedRecord.isLastNameMatch = nameMatch.isLastNameMatch;
           
-          // 元の名前と修正後の名前が違う場合のみ補正情報を記録
-          if (record.氏名 !== nameMatch.match) {
-            correctedRecord.originalName = record.氏名;
-          }
+          // 常に元の名前を記録（補正結果の表示用）
+          correctedRecord.originalName = record.氏名;
           
           // 信頼度が低い場合はエラーフラグを設定
-          if (nameMatch.confidence < 0.5) {
+          if (nameMatch.confidence < 0.4) {
             correctedRecord.nameError = true;
+            console.log(`🔴 エラーフラグ設定: ${record.氏名} (${Math.round(nameMatch.confidence * 100)}%)`);
           }
         }
       }
@@ -160,14 +160,13 @@ export class DataCorrectionService {
           correctedRecord.matchType = nameMatch.type;
           correctedRecord.isLastNameMatch = nameMatch.isLastNameMatch;
           
-          // 元の名前と修正後の名前が違う場合のみ補正情報を記録
-          if (record.氏名 !== nameMatch.match) {
-            correctedRecord.originalName = record.氏名;
-          }
+          // 常に元の名前を記録（補正結果の表示用）
+          correctedRecord.originalName = record.氏名;
           
           // 信頼度が低い場合はエラーフラグを設定
-          if (nameMatch.confidence < 0.5) {
+          if (nameMatch.confidence < 0.4) {
             correctedRecord.nameError = true;
+            console.log(`🔴 エラーフラグ設定: ${record.氏名} (${Math.round(nameMatch.confidence * 100)}%)`);
           }
         }
       }
