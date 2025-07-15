@@ -32,6 +32,11 @@ jobs:
       run: npm ci
     
     - name: Build
+      env:
+        VITE_OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY }}
+        VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+        VITE_GOOGLE_API_KEY: ${{ secrets.VITE_GOOGLE_API_KEY }}
+        VITE_SPREADSHEET_ID: ${{ secrets.VITE_SPREADSHEET_ID }}
       run: npm run build
     
     - name: Setup Pages

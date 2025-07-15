@@ -15,9 +15,7 @@ interface EnvConfig {
 class EnvironmentValidator {
   private static validateRequired(value: string | undefined, name: string): string {
     if (!value || value.includes('your_') || value === '') {
-      // 本番環境では設定画面から入力できるようにする
-      console.warn(`環境変数 ${name} が設定されていません。設定画面から入力してください。`);
-      return '';
+      throw new Error(`環境変数 ${name} が設定されていません。GitHub Secretsを確認してください。`);
     }
     return value;
   }

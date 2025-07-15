@@ -5,8 +5,28 @@ import { EnvironmentValidator } from '@/utils/envConfig';
  * Google Sheets API を使用したデータ管理サービス
  */
 export class GoogleSheetsService {
-  private static config = EnvironmentValidator.getConfig();
+  private static config: any = null;
   private static accessToken: string | null = null;
+  
+  private static getConfig() {
+    if (!this.config) {
+      try {
+        this.config = EnvironmentValidator.getConfig();
+      } catch (error) {
+        console.warn('環境設定の読み込みに失敗しました:', error);
+        this.config = {
+          openaiApiKey: '',
+          googleClientId: '',
+          googleApiKey: '',
+          spreadsheetId: '',
+          appName: '作業記録簿OCR',
+          appVersion: '1.0.0',
+          isDev: false
+        };
+      }
+    }
+    return this.config;
+  }
 
   /**
    * Google OAuth認証を開始
@@ -19,7 +39,7 @@ export class GoogleSheetsService {
       }
 
       window.google.accounts.oauth2.initTokenClient({
-        client_id: this.config.googleClientId,
+        client_id: this.getConfig().googleClientId,
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         callback: (response: any) => {
           if (response.error) {
@@ -59,7 +79,7 @@ export class GoogleSheetsService {
 
     try {
       const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}?key=${this.config.googleApiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -169,7 +189,7 @@ export class GoogleSheetsService {
     try {
       // 管理シートからA列とB列を取得
       const masterDataResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}/values/管理!A:B?key=${this.config.googleApiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/管理!A:B?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -409,7 +429,7 @@ export class GoogleSheetsService {
       console.log(`🔍 既存行検索開始: シート "${sheetName}", 対象日付 "${workDate}"`);
       
       const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}/values/${sheetName}!A:A?key=${this.config.googleApiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A:A?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -479,7 +499,7 @@ export class GoogleSheetsService {
   private static async getCurrentRowData(sheetName: string, rowIndex: number): Promise<(string | number)[]> {
     try {
       const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}/values/${sheetName}!A${rowIndex}:P${rowIndex}?key=${this.config.googleApiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A${rowIndex}:P${rowIndex}?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -857,7 +877,7 @@ export class GoogleSheetsService {
     console.log(`🔄 行更新API呼び出し: ${sheetName}!A${rowIndex}:P${rowIndex}`);
     
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}/values/${sheetName}!A${rowIndex}:P${rowIndex}?valueInputOption=RAW&key=${this.config.googleApiKey}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A${rowIndex}:P${rowIndex}?valueInputOption=RAW&key=${this.getConfig().googleApiKey}`,
       {
         method: 'PUT',
         headers: {
@@ -889,7 +909,7 @@ export class GoogleSheetsService {
     console.log(`➕ 行追加API呼び出し: ${sheetName}!A:P`);
     
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}/values/${sheetName}!A:P:append?valueInputOption=RAW&key=${this.config.googleApiKey}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A:P:append?valueInputOption=RAW&key=${this.getConfig().googleApiKey}`,
       {
         method: 'POST',
         headers: {
@@ -921,7 +941,7 @@ export class GoogleSheetsService {
       await this.ensureAuthenticated();
       
       const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.config.spreadsheetId}?key=${this.config.googleApiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,

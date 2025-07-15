@@ -6,7 +6,27 @@ import { EnvironmentValidator } from '@/utils/envConfig';
  * OpenAI Vision APIを使用したOCRサービス
  */
 export class OpenAIOcrService {
-  private static config = EnvironmentValidator.getConfig();
+  private static config: any = null;
+  
+  private static getConfig() {
+    if (!this.config) {
+      try {
+        this.config = EnvironmentValidator.getConfig();
+      } catch (error) {
+        console.warn('環境設定の読み込みに失敗しました:', error);
+        this.config = {
+          openaiApiKey: '',
+          googleClientId: '',
+          googleApiKey: '',
+          spreadsheetId: '',
+          appName: '作業記録簿OCR',
+          appVersion: '1.0.0',
+          isDev: false
+        };
+      }
+    }
+    return this.config;
+  }
 
 
   /**
@@ -114,7 +134,7 @@ export class OpenAIOcrService {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.config.openaiApiKey}`,
+          'Authorization': `Bearer ${this.getConfig().openaiApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
@@ -277,7 +297,7 @@ export class OpenAIOcrService {
     try {
       const response = await fetch('https://api.openai.com/v1/models', {
         headers: {
-          'Authorization': `Bearer ${this.config.openaiApiKey}`,
+          'Authorization': `Bearer ${this.getConfig().openaiApiKey}`,
         },
       });
       return response.ok;
