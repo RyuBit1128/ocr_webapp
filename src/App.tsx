@@ -14,7 +14,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <Router>
+        <Router basename="/ocr_0714_v2">
           <Layout>
             <Routes>
               <Route path="/" element={<CameraPage />} />
