@@ -60,9 +60,10 @@ const ProcessingPage: React.FC = () => {
         const correctedResult = await DataCorrectionService.correctOcrResult(ocrResult);
         
         // デフォルトの作業日を今日の日付に設定
-        if (!correctedResult.ヘッダー.作業日) {
+        if (!correctedResult.ヘッダー.作業日 || correctedResult.ヘッダー.作業日 === 'undefined') {
           const today = new Date();
           correctedResult.ヘッダー.作業日 = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+          console.log('作業日をデフォルト値に設定:', correctedResult.ヘッダー.作業日);
         }
         
         setProgress(100);
@@ -70,6 +71,7 @@ const ProcessingPage: React.FC = () => {
         setOcrResult(correctedResult);
         setCurrentStep(3);
         
+        console.log('✅ OCR処理完了 - 確認画面に移動します');
         setTimeout(() => {
           navigate('/confirmation');
         }, 1000);

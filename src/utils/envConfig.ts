@@ -17,7 +17,7 @@ class EnvironmentValidator {
     if (!value || value.includes('your_') || value === '') {
       throw new Error(`環境変数 ${name} が設定されていません。GitHub Secretsを確認してください。`);
     }
-    return value;
+    return value.trim(); // 改行文字を除去
   }
 
   static getConfig(): EnvConfig {
