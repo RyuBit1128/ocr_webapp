@@ -361,10 +361,10 @@ const ConfirmationPage: React.FC = () => {
           
           // 失敗した作業者のみを残してデータを更新
           const failedPackaging = editedData.包装作業記録.filter(record => 
-            result.failedWorkers.includes(record.氏名)
+            result.failedWorkers!.includes(record.氏名)
           );
           const failedMachine = editedData.機械操作記録.filter(record => 
-            result.failedWorkers.includes(record.氏名)
+            result.failedWorkers!.includes(record.氏名)
           );
           
           setEditedData({
