@@ -12,6 +12,11 @@ import {
   Stack,
   Chip,
   Autocomplete,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -39,6 +44,11 @@ const ConfirmationPage: React.FC = () => {
   const [editedData, setEditedData] = useState<OcrResult | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [overwriteCallback, setOverwriteCallback] = useState<(() => Promise<void>) | null>(null);
+  const [failedWorkers, setFailedWorkers] = useState<string[]>([]);
+  const [missingSheetDialogOpen, setMissingSheetDialogOpen] = useState(false);
+  const [missingSheetMessage, setMissingSheetMessage] = useState('');
 
   // 時間フォーマット関数
   const formatTimeInput = (input: string): string => {
@@ -337,34 +347,107 @@ const ConfirmationPage: React.FC = () => {
       return;
     }
 
-    setIsSaving(true);
-    
-    try {
-      // Google Sheetsに保存
-      await GoogleSheetsService.saveToPersonalSheets(editedData);
+    // 実際の保存処理
+    const performSave = async () => {
+      setIsSaving(true);
       
-      setSuccess('✅ データを保存しました！');
-      setCurrentStep(4);
-      navigate('/success');
-      
-    } catch (error) {
-      console.error('保存エラー:', error);
-      
-      let errorMessage = 'データの保存に失敗しました。';
-      if (error instanceof Error) {
-        if (error.message.includes('認証')) {
-          errorMessage = 'Google認証に失敗しました。再度お試しください。';
-        } else if (error.message.includes('ネットワーク')) {
-          errorMessage = 'ネットワークエラーが発生しました。接続を確認してください。';
+      try {
+        // Google Sheetsに保存
+        const result = await GoogleSheetsService.saveToPersonalSheets(editedData);
+        
+        // 失敗した作業者がいる場合
+        if (result && result.failedWorkers && result.failedWorkers.length > 0) {
+          setFailedWorkers(result.failedWorkers);
+          
+          // 失敗した作業者のみを残してデータを更新
+          const failedPackaging = editedData.包装作業記録.filter(record => 
+            result.failedWorkers.includes(record.氏名)
+          );
+          const failedMachine = editedData.機械操作記録.filter(record => 
+            result.failedWorkers.includes(record.氏名)
+          );
+          
+          setEditedData({
+            ...editedData,
+            包装作業記録: failedPackaging,
+            機械操作記録: failedMachine,
+          });
+          
+          // 作業日から年月を計算
+          const workDate = new Date(editedData.ヘッダー.作業日!);
+          const year = workDate.getFullYear();
+          const month = workDate.getMonth() + 1;
+          const day = workDate.getDate();
+          
+          // 21日サイクルで年月を計算（GoogleSheetsServiceと同じロジック）
+          let periodYear = year;
+          let periodMonth = month;
+          if (day <= 20) {
+            if (month === 1) {
+              periodYear = year - 1;
+              periodMonth = 12;
+            } else {
+              periodMonth = month - 1;
+            }
+          }
+          
+          setMissingSheetMessage(`以下の作業者の個人シート（${periodYear}年${periodMonth.toString().padStart(2, '0')}月度）が見つかりませんでした。\nスプレッドシートで個人シートを作成してください。\n\n作業者: ${result.failedWorkers.join(', ')}`);
+          setMissingSheetDialogOpen(true);
         } else {
-          errorMessage = error.message;
+          // 全員成功した場合
+          setSuccess('✅ データを保存しました！');
+          setCurrentStep(4);
+          navigate('/success');
         }
+        
+      } catch (error) {
+        console.error('保存エラー:', error);
+        
+        let errorMessage = 'データの保存に失敗しました。';
+        if (error instanceof Error) {
+          if (error.message.includes('個人シートがありません')) {
+            errorMessage = error.message;
+          } else if (error.message.includes('認証')) {
+            errorMessage = 'Google認証に失敗しました。再度お試しください。';
+          } else if (error.message.includes('ネットワーク')) {
+            errorMessage = 'ネットワークエラーが発生しました。接続を確認してください。';
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        
+        alert(errorMessage);
+      } finally {
+        setIsSaving(false);
       }
+    };
+
+    setIsSaving(true);
+
+    try {
+      // 既存データの確認
+      const hasExistingData = await GoogleSheetsService.checkExistingData(editedData);
       
-      alert(errorMessage);
-    } finally {
-      setIsSaving(false);
+      if (hasExistingData) {
+        // 既存データがある場合は確認ダイアログを表示
+        setOverwriteCallback(() => performSave);
+        setConfirmDialogOpen(true);
+        setIsSaving(false);
+      } else {
+        // 既存データがない場合はそのまま保存
+        await performSave();
+      }
+    } catch (error) {
+      console.error('既存データ確認エラー:', error);
+      // エラーが発生しても保存は続行（ダイアログは表示しない）
+      await performSave();
     }
+  };
+
+  // 上書きキャンセル処理
+  const handleCancelOverwrite = () => {
+    setConfirmDialogOpen(false);
+    setOverwriteCallback(null);
   };
 
   const handleBack = () => {
@@ -420,31 +503,47 @@ const ConfirmationPage: React.FC = () => {
             <Edit sx={{ mr: 1 }} />
             基本情報
           </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ja">
-              <DatePicker
-                label="作業日"
-                value={editedData.ヘッダー.作業日 ? dayjs(editedData.ヘッダー.作業日) : null}
-                onChange={(newValue: Dayjs | null) => {
-                  if (newValue) {
-                    updateHeader('作業日', newValue.format('YYYY/MM/DD'));
-                  }
-                }}
-                format="YYYY/MM/DD"
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    variant: "outlined",
-                    sx: {
-                      '& .MuiInputBase-root': {
-                        height: '40px',
-                        fontSize: '14px',
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* 作業日と作業時間を横並び */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ja">
+                <DatePicker
+                  label="作業日"
+                  value={editedData.ヘッダー.作業日 ? dayjs(editedData.ヘッダー.作業日) : null}
+                  onChange={(newValue: Dayjs | null) => {
+                    if (newValue) {
+                      updateHeader('作業日', newValue.format('YYYY/MM/DD'));
+                    }
+                  }}
+                  format="YYYY/MM/DD"
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      variant: "outlined",
+                      sx: {
+                        '& .MuiInputBase-root': {
+                          height: '56px',
+                          fontSize: '18px',
+                        }
                       }
                     }
+                  }}
+                />
+              </LocalizationProvider>
+              <TextField
+                label="作業時間"
+                value={editedData.ヘッダー.作業時間}
+                onChange={(e) => updateHeader('作業時間', e.target.value)}
+                fullWidth
+                variant="outlined"
+                sx={{
+                  '& .MuiInputBase-root': {
+                    height: '56px',
+                    fontSize: '18px',
                   }
                 }}
               />
-            </LocalizationProvider>
+            </Box>
             <TextField
               label="工場名"
               value={editedData.ヘッダー.工場名}
@@ -453,8 +552,8 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               sx={{
                 '& .MuiInputBase-root': {
-                  height: '40px',
-                  fontSize: '14px',
+                  height: '56px',
+                  fontSize: '18px',
                 }
               }}
             />
@@ -483,7 +582,7 @@ const ConfirmationPage: React.FC = () => {
                     }}
                     sx={{
                       '& .MuiInputBase-root': {
-                        fontSize: '14px',
+                        fontSize: '18px',
                       }
                     }}
                   />
@@ -502,27 +601,29 @@ const ConfirmationPage: React.FC = () => {
                     size="small"
                     color={(editedData.ヘッダー as any).productError ? 'error' : 
                            (getCorrectionInfo(editedData.ヘッダー, '商品名')?.confidence || 0) >= 0.9 ? 'success' : 'warning'}
-                    sx={{ height: '18px', fontSize: '10px' }}
+                    sx={{ height: '32px', fontSize: '16px' }}
                   />
                 </Box>
               )}
             </Box>
-            <TextField
-              label="作業時間"
-              value={editedData.ヘッダー.作業時間}
-              onChange={(e) => updateHeader('作業時間', e.target.value)}
-              fullWidth
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-root': {
-                  height: '40px',
-                  fontSize: '14px',
-                }
-              }}
-            />
           </Box>
         </CardContent>
       </Card>
+
+      {/* 失敗した作業者がいる場合の警告メッセージ */}
+      {failedWorkers.length > 0 && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>
+            以下の作業者のシートが見つかりませんでした：
+          </Typography>
+          <Typography variant="body2">
+            {failedWorkers.join('、')}
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            正しい名前に修正して、再度保存してください。
+          </Typography>
+        </Alert>
+      )}
 
       {/* 包装作業記録 */}
       <Card sx={{ mb: 3 }}>
@@ -555,73 +656,101 @@ const ConfirmationPage: React.FC = () => {
                   borderTopColor: 'primary.main',
                 }}
               >
-                {/* 1行目：氏名（幅広・高さ短く） */}
-                <Box sx={{ mb: 1 }}>
-                  <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                    氏名
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Autocomplete
-                      options={masterData.employees}
-                      value={worker.氏名}
-                      onChange={(_, newValue) => {
-                        updatePackagingRecord(index, '氏名', newValue || '');
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          variant="outlined"
-                          error={!worker.氏名 || worker.nameError}
-                          helperText=''
-                          sx={{
-                            '& .MuiInputBase-root': {
-                              fontSize: '12px',
-                              height: '32px',
-                            }
-                          }}
-                        />
-                      )}
-                      freeSolo
-                      fullWidth
-                      disabled={masterDataLoading}
-                    />
-                    {getConfidenceIcon(worker.confidence)}
-                  </Box>
-                  {worker.originalName && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                      <Typography variant="caption" color="primary">
-                        元: {worker.originalName}
-                      </Typography>
-                      <Chip
-                        label={`${Math.round((worker.confidence || 0) * 100)}%`}
-                        size="small"
-                        color={worker.nameError ? 'error' : 
-                               worker.confidence && worker.confidence >= 0.9 ? 'success' : 'warning'}
-                        sx={{ height: '18px', fontSize: '10px' }}
+                {/* 1行目：氏名と生産数を横並び */}
+                <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
+                  {/* 氏名 */}
+                  <Box sx={{ flex: 2 }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      氏名
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Autocomplete
+                        options={masterData.employees}
+                        value={worker.氏名}
+                        onChange={(_, newValue) => {
+                          updatePackagingRecord(index, '氏名', newValue || '');
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            error={!worker.氏名 || worker.nameError}
+                            helperText=''
+                            sx={{
+                              '& .MuiInputBase-root': {
+                                fontSize: '24px',
+                                height: '64px',
+                              },
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': {
+                                  borderColor: (!worker.氏名 || worker.nameError || !masterData.employees.includes(worker.氏名)) ? 'error.main' : undefined,
+                                  borderWidth: (!worker.氏名 || worker.nameError || !masterData.employees.includes(worker.氏名)) ? 2 : 1,
+                                },
+                              }
+                            }}
+                          />
+                        )}
+                        freeSolo
+                        fullWidth
+                        disabled={masterDataLoading}
                       />
+                      {getConfidenceIcon(worker.confidence)}
                     </Box>
-                  )}
+                    {worker.originalName && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                        <Typography variant="caption" color="primary">
+                          元: {worker.originalName}
+                        </Typography>
+                        <Chip
+                          label={`${Math.round((worker.confidence || 0) * 100)}%`}
+                          size="small"
+                          color={worker.nameError ? 'error' : 
+                                 worker.confidence && worker.confidence >= 0.9 ? 'success' : 'warning'}
+                          sx={{ height: '32px', fontSize: '16px' }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                  {/* 生産数 */}
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      生産数
+                    </Typography>
+                    <TextField
+                      value={worker.生産数}
+                      onChange={(e) => updatePackagingRecord(index, '生産数', e.target.value)}
+                      fullWidth
+                      type="number"
+                      placeholder="生産数"
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          height: '64px',
+                          fontSize: '24px',
+                        }
+                      }}
+                    />
+                  </Box>
                 </Box>
                 
                 {/* 2行目：開始時刻、終了時刻、休憩 */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 2, mb: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1 }}>
                   {/* 時刻リスト */}
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary' }}>
+                      <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary' }}>
                         開始・終了時刻
                       </Typography>
                       <IconButton
                         onClick={() => addPackagingTimeSlot(index)}
                         size="small"
                         color="primary"
-                        sx={{ width: '20px', height: '20px' }}
+                        sx={{ width: '48px', height: '48px' }}
                       >
-                        <Add sx={{ fontSize: '14px' }} />
+                        <Add sx={{ fontSize: '28px' }} />
                       </IconButton>
                     </Box>
                     {worker.時刻リスト?.map((timeSlot, timeSlotIndex) => (
-                      <Box key={timeSlotIndex} sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 1, mb: 0.5 }}>
+                      <Box key={timeSlotIndex} sx={{ display: 'flex', flexDirection: 'row', gap: 1, mb: 1, alignItems: 'center' }}>
                         <TextField
                           value={timeSlot.開始時刻}
                           onChange={(e) => updatePackagingTimeSlot(index, timeSlotIndex, '開始時刻', e.target.value)}
@@ -635,8 +764,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 800 → 8:00"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '28px',
-                              fontSize: '11px',
+                              height: '64px',
+                              fontSize: '22px',
                             }
                           }}
                         />
@@ -653,8 +782,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 1730 → 17:30"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '28px',
-                              fontSize: '11px',
+                              height: '64px',
+                              fontSize: '22px',
                             }
                           }}
                         />
@@ -663,18 +792,20 @@ const ConfirmationPage: React.FC = () => {
                             onClick={() => deletePackagingTimeSlot(index, timeSlotIndex)}
                             size="small"
                             color="error"
-                            sx={{ width: '20px', height: '20px' }}
+                            sx={{ width: '48px', height: '48px' }}
                           >
-                            <Delete sx={{ fontSize: '12px' }} />
+                            <Delete sx={{ fontSize: '28px' }} />
                           </IconButton>
                         )}
                       </Box>
                     ))}
                   </Box>
-                  
-                  {/* 休憩 */}
-                  <Box>
-                    <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                </Box>
+                
+                {/* 3行目：休憩と削除操作を横並び */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       休憩
                     </Typography>
                     <Stack direction="row" spacing={0.5} alignItems="center">
@@ -686,8 +817,8 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: worker.休憩.昼休み ? 600 : 400,
-                          fontSize: '10px',
-                          height: '24px',
+                          fontSize: '16px',
+                          height: '40px',
                         }}
                       />
                       <Chip
@@ -698,37 +829,15 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: worker.休憩.中休み ? 600 : 400,
-                          fontSize: '10px',
-                          height: '24px',
+                          fontSize: '16px',
+                          height: '40px',
                         }}
                       />
                     </Stack>
                   </Box>
-                </Box>
-                
-                {/* 3行目：生産数と操作 */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'end' }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      生産数
-                    </Typography>
-                    <TextField
-                      value={worker.生産数}
-                      onChange={(e) => updatePackagingRecord(index, '生産数', e.target.value)}
-                      fullWidth
-                      type="number"
-                      placeholder="生産数"
-                      sx={{
-                        '& .MuiInputBase-root': {
-                          height: '32px',
-                          fontSize: '12px',
-                        }
-                      }}
-                    />
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      操作
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      削除
                     </Typography>
                     <IconButton
                       onClick={() => deletePackagingRecord(index)}
@@ -782,73 +891,101 @@ const ConfirmationPage: React.FC = () => {
                   borderTopColor: 'primary.main',
                 }}
               >
-                {/* 1行目：氏名（幅広・高さ短く） */}
-                <Box sx={{ mb: 1 }}>
-                  <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                    氏名
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Autocomplete
-                      options={masterData.employees}
-                      value={operation.氏名}
-                      onChange={(_, newValue) => {
-                        updateMachineRecord(index, '氏名', newValue || '');
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          variant="outlined"
-                          error={!operation.氏名 || operation.nameError}
-                          helperText=''
-                          sx={{
-                            '& .MuiInputBase-root': {
-                              fontSize: '12px',
-                              height: '32px',
-                            }
-                          }}
-                        />
-                      )}
-                      freeSolo
-                      fullWidth
-                      disabled={masterDataLoading}
-                    />
-                    {getConfidenceIcon(operation.confidence)}
-                  </Box>
-                  {operation.originalName && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                      <Typography variant="caption" color="primary">
-                        元: {operation.originalName}
-                      </Typography>
-                      <Chip
-                        label={`${Math.round((operation.confidence || 0) * 100)}%`}
-                        size="small"
-                        color={operation.nameError ? 'error' : 
-                               operation.confidence && operation.confidence >= 0.9 ? 'success' : 'warning'}
-                        sx={{ height: '18px', fontSize: '10px' }}
+                {/* 1行目：氏名と生産数を横並び */}
+                <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
+                  {/* 氏名 */}
+                  <Box sx={{ flex: 2 }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      氏名
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Autocomplete
+                        options={masterData.employees}
+                        value={operation.氏名}
+                        onChange={(_, newValue) => {
+                          updateMachineRecord(index, '氏名', newValue || '');
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            error={!operation.氏名 || operation.nameError}
+                            helperText=''
+                            sx={{
+                              '& .MuiInputBase-root': {
+                                fontSize: '24px',
+                                height: '64px',
+                              },
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': {
+                                  borderColor: (!operation.氏名 || operation.nameError || !masterData.employees.includes(operation.氏名)) ? 'error.main' : undefined,
+                                  borderWidth: (!operation.氏名 || operation.nameError || !masterData.employees.includes(operation.氏名)) ? 2 : 1,
+                                },
+                              }
+                            }}
+                          />
+                        )}
+                        freeSolo
+                        fullWidth
+                        disabled={masterDataLoading}
                       />
+                      {getConfidenceIcon(operation.confidence)}
                     </Box>
-                  )}
+                    {operation.originalName && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                        <Typography variant="caption" color="primary">
+                          元: {operation.originalName}
+                        </Typography>
+                        <Chip
+                          label={`${Math.round((operation.confidence || 0) * 100)}%`}
+                          size="small"
+                          color={operation.nameError ? 'error' : 
+                                 operation.confidence && operation.confidence >= 0.9 ? 'success' : 'warning'}
+                          sx={{ height: '32px', fontSize: '16px' }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                  {/* 生産数 */}
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      生産数
+                    </Typography>
+                    <TextField
+                      value={operation.生産数}
+                      onChange={(e) => updateMachineRecord(index, '生産数', e.target.value)}
+                      fullWidth
+                      type="number"
+                      placeholder="生産数"
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          height: '64px',
+                          fontSize: '24px',
+                        }
+                      }}
+                    />
+                  </Box>
                 </Box>
                 
                 {/* 2行目：開始時刻、終了時刻、休憩 */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 2, mb: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1 }}>
                   {/* 時刻リスト */}
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary' }}>
+                      <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary' }}>
                         開始・終了時刻
                       </Typography>
                       <IconButton
                         onClick={() => addMachineTimeSlot(index)}
                         size="small"
                         color="primary"
-                        sx={{ width: '20px', height: '20px' }}
+                        sx={{ width: '48px', height: '48px' }}
                       >
-                        <Add sx={{ fontSize: '14px' }} />
+                        <Add sx={{ fontSize: '28px' }} />
                       </IconButton>
                     </Box>
                     {operation.時刻リスト?.map((timeSlot, timeSlotIndex) => (
-                      <Box key={timeSlotIndex} sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 1, mb: 0.5 }}>
+                      <Box key={timeSlotIndex} sx={{ display: 'flex', flexDirection: 'row', gap: 1, mb: 1, alignItems: 'center' }}>
                         <TextField
                           value={timeSlot.開始時刻}
                           onChange={(e) => updateMachineTimeSlot(index, timeSlotIndex, '開始時刻', e.target.value)}
@@ -862,8 +999,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 800 → 8:00"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '28px',
-                              fontSize: '11px',
+                              height: '64px',
+                              fontSize: '22px',
                             }
                           }}
                         />
@@ -880,8 +1017,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 1730 → 17:30"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '28px',
-                              fontSize: '11px',
+                              height: '64px',
+                              fontSize: '22px',
                             }
                           }}
                         />
@@ -890,18 +1027,20 @@ const ConfirmationPage: React.FC = () => {
                             onClick={() => deleteMachineTimeSlot(index, timeSlotIndex)}
                             size="small"
                             color="error"
-                            sx={{ width: '20px', height: '20px' }}
+                            sx={{ width: '48px', height: '48px' }}
                           >
-                            <Delete sx={{ fontSize: '12px' }} />
+                            <Delete sx={{ fontSize: '28px' }} />
                           </IconButton>
                         )}
                       </Box>
                     ))}
                   </Box>
-                  
-                  {/* 休憩 */}
-                  <Box>
-                    <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                </Box>
+                
+                {/* 3行目：休憩と削除操作を横並び */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       休憩
                     </Typography>
                     <Stack direction="row" spacing={0.5} alignItems="center">
@@ -913,8 +1052,8 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: operation.休憩.昼休み ? 600 : 400,
-                          fontSize: '10px',
-                          height: '24px',
+                          fontSize: '16px',
+                          height: '40px',
                         }}
                       />
                       <Chip
@@ -925,37 +1064,15 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: operation.休憩.中休み ? 600 : 400,
-                          fontSize: '10px',
-                          height: '24px',
+                          fontSize: '16px',
+                          height: '40px',
                         }}
                       />
                     </Stack>
                   </Box>
-                </Box>
-                
-                {/* 3行目：生産数と操作 */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 2, alignItems: 'end' }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      生産数
-                    </Typography>
-                    <TextField
-                      value={operation.生産数}
-                      onChange={(e) => updateMachineRecord(index, '生産数', e.target.value)}
-                      fullWidth
-                      type="number"
-                      placeholder="生産数"
-                      sx={{
-                        '& .MuiInputBase-root': {
-                          height: '32px',
-                          fontSize: '12px',
-                        }
-                      }}
-                    />
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      操作
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      削除
                     </Typography>
                     <IconButton
                       onClick={() => deleteMachineRecord(index)}
@@ -998,6 +1115,74 @@ const ConfirmationPage: React.FC = () => {
           {isSaving ? '保存中...' : '💾 保存する'}
         </Button>
       </Box>
+
+      {/* 上書き確認ダイアログ */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={handleCancelOverwrite}
+        aria-labelledby="overwrite-dialog-title"
+        aria-describedby="overwrite-dialog-description"
+      >
+        <DialogTitle id="overwrite-dialog-title">
+          <Warning color="warning" sx={{ verticalAlign: 'middle', mr: 1 }} />
+          既存のデータを上書きしますか？
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="overwrite-dialog-description">
+            {editedData?.ヘッダー?.作業日} の日付で、既にデータが記録されている作業者がいます。
+            <br />
+            既存のデータに上書きしてもよろしいですか？
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelOverwrite} color="primary">
+            キャンセル
+          </Button>
+          <Button 
+            onClick={() => {
+              if (overwriteCallback) {
+                overwriteCallback();
+              }
+              setConfirmDialogOpen(false);
+            }} 
+            color="primary" 
+            variant="contained"
+            autoFocus
+          >
+            上書きする
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 個人シート見つからない通知ダイアログ */}
+      <Dialog
+        open={missingSheetDialogOpen}
+        onClose={() => setMissingSheetDialogOpen(false)}
+        aria-labelledby="missing-sheet-dialog-title"
+        aria-describedby="missing-sheet-dialog-description"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="missing-sheet-dialog-title" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Warning color="error" />
+          個人シートが見つかりません
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="missing-sheet-dialog-description" sx={{ whiteSpace: 'pre-line', fontSize: '16px' }}>
+            {missingSheetMessage}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setMissingSheetDialogOpen(false)} 
+            color="primary" 
+            variant="contained"
+            autoFocus
+          >
+            確認
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

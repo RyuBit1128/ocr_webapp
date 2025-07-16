@@ -50,7 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* ステッパー */}
       <Box sx={{ bgcolor: 'white', py: 2, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-        <Container maxWidth="sm">
+        <Container maxWidth="md">
           <Stepper activeStep={currentStep - 1} alternativeLabel>
             {steps.map((step, index) => (
               <Step key={step.label}>
@@ -91,7 +91,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </Box>
 
       {/* メインコンテンツ */}
-      <Container maxWidth="sm" sx={{ py: 3, flex: 1 }}>
+      <Container maxWidth="md" sx={{ py: 3, flex: 1 }}>
         <ConnectionStatus />
         {children}
       </Container>

@@ -101,20 +101,22 @@ export class GoogleSheetsService {
 
   /**
    * 作業日から適切な年月を計算（21日サイクル）
+   * 例：6月21日～7月20日 → 6月シート、7月21日～8月20日 → 7月シート
    */
   private static calculatePeriodYearMonth(workDate: Date): { year: number; month: number } {
     const year = workDate.getFullYear();
     const month = workDate.getMonth() + 1; // 0ベースなので+1
     const day = workDate.getDate();
 
-    // 21日以降は翌月扱い
-    if (day >= 21) {
-      if (month === 12) {
-        return { year: year + 1, month: 1 };
+    // 1日〜20日は前月扱い（前月の21日〜当月20日の期間に属する）
+    if (day <= 20) {
+      if (month === 1) {
+        return { year: year - 1, month: 12 };
       } else {
-        return { year, month: month + 1 };
+        return { year, month: month - 1 };
       }
     } else {
+      // 21日以降は当月扱い（当月21日〜翌月20日の期間に属する）
       return { year, month };
     }
   }
@@ -133,8 +135,8 @@ export class GoogleSheetsService {
       // 21日サイクルで年月を計算
       const { year, month } = this.calculatePeriodYearMonth(date);
       
-      // 期待されるシート名パターン
-      const expectedSheetName = `${employeeName}_${year}年${month}月`;
+      // 期待されるシート名パターン（ゼロ埋め対応）
+      const expectedSheetName = `${employeeName}_${year}年${month.toString().padStart(2, '0')}月`;
       
       // 全シート名を取得
       const allSheetNames = await this.getAllSheetNames();
@@ -145,21 +147,11 @@ export class GoogleSheetsService {
         return expectedSheetName;
       }
 
-      // 部分一致も試す（従業員名が完全一致しない場合）
-      const partialMatch = allSheetNames.find(sheetName => {
-        const pattern = new RegExp(`^${employeeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_\\d{4}年\\d{1,2}月$`);
-        return pattern.test(sheetName);
-      });
-
-      if (partialMatch) {
-        console.log(`⚠️ 部分一致で個人シートが見つかりました: ${partialMatch}`);
-        return partialMatch;
-      }
-
       console.log(`❌ 個人シートが見つかりません: ${expectedSheetName}`);
       console.log('利用可能なシート:', allSheetNames.filter(name => name.includes(employeeName)));
       
-      return null;
+      // 個人シートが見つからない場合のエラーメッセージ
+      throw new Error(`個人シートがありません。個人シートを作成してください。\n\n必要なシート名: ${expectedSheetName}\n\n作成手順:\n1. Googleスプレッドシートで新しいシートを追加\n2. シート名を「${expectedSheetName}」に設定\n3. 再度お試しください`);
     } catch (error) {
       console.error('個人シート検索エラー:', error);
       throw error;
@@ -249,9 +241,56 @@ export class GoogleSheetsService {
   }
 
   /**
+   * 既存データのチェック
+   */
+  static async checkExistingData(ocrResult: OcrResult): Promise<boolean> {
+    await this.ensureAuthenticated();
+
+    try {
+      const workDate = this.normalizeDate(ocrResult.ヘッダー.作業日!);
+      console.log(`🔍 ${workDate} の既存データをチェック中...`);
+      
+      // 全作業者のリストを作成
+      const allWorkers = [
+        ...(ocrResult.包装作業記録 || []).map(record => record.氏名),
+        ...(ocrResult.機械操作記録 || []).map(record => record.氏名),
+      ].filter(name => name && name.trim());
+
+      console.log(`👥 チェック対象作業者: ${allWorkers.join(', ')}`);
+
+      // 各作業者の個人シートに該当日のデータがあるかチェック
+      for (const workerName of allWorkers) {
+        try {
+          const personalSheetName = await this.findPersonalSheet(workerName, ocrResult.ヘッダー.作業日!);
+          if (personalSheetName) {
+            const existingRowIndex = await this.findExistingRowByDate(personalSheetName, workDate);
+            if (existingRowIndex > 0) {
+              console.log(`📋 ${personalSheetName} に ${workDate} のデータが存在 (行${existingRowIndex})`);
+              return true; // 一人でも既存データがあれば true を返す
+            } else {
+              console.log(`📋 ${personalSheetName} に ${workDate} のデータなし`);
+            }
+          } else {
+            console.log(`⚠️ ${workerName} の個人シートが見つかりません`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ ${workerName} のデータチェック中にエラー:`, error);
+          // 個別のエラーは警告のみとし、処理を続行
+        }
+      }
+      
+      console.log(`✅ ${workDate} の既存データなし（新規保存）`);
+      return false; // 誰も既存データがなければ false を返す
+    } catch (error) {
+      console.error('❌ 既存データチェックエラー:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 個人シートにデータを保存
    */
-  static async saveToPersonalSheets(ocrResult: OcrResult): Promise<void> {
+  static async saveToPersonalSheets(ocrResult: OcrResult): Promise<{ failedWorkers?: string[] } | void> {
     await this.ensureAuthenticated();
 
     try {
@@ -269,12 +308,28 @@ export class GoogleSheetsService {
       console.log(`📦 商品名: ${ocrResult.ヘッダー.商品名}`);
       console.log(`👥 対象作業者: ${allWorkers.join(', ')}`);
 
+      // 失敗した作業者を追跡
+      const failedWorkers: string[] = [];
+
       // 各作業者の個人シートに保存
       const savePromises = allWorkers.map(async (workerName) => {
-        await this.saveWorkerData(workerName, ocrResult);
+        try {
+          await this.saveWorkerData(workerName, ocrResult);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('個人シートがありません')) {
+            failedWorkers.push(workerName);
+          } else {
+            throw error;
+          }
+        }
       });
 
       await Promise.all(savePromises);
+      
+      if (failedWorkers.length > 0) {
+        console.log(`⚠️ 以下の作業者の保存に失敗しました: ${failedWorkers.join(', ')}`);
+        return { failedWorkers };
+      }
       
       console.log('✅ 全ての個人シートへの保存が完了しました');
       console.log('========================');
