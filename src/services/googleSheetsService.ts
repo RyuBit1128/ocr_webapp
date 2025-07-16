@@ -241,9 +241,9 @@ export class GoogleSheetsService {
   }
 
   /**
-   * 既存データのチェック
+   * 既存データのチェック（個人ごとの判定）
    */
-  static async checkExistingData(ocrResult: OcrResult): Promise<boolean> {
+  static async checkExistingData(ocrResult: OcrResult): Promise<{ [workerName: string]: boolean }> {
     await this.ensureAuthenticated();
 
     try {
@@ -258,32 +258,79 @@ export class GoogleSheetsService {
 
       console.log(`👥 チェック対象作業者: ${allWorkers.join(', ')}`);
 
+      const existingDataMap: { [workerName: string]: boolean } = {};
+
       // 各作業者の個人シートに該当日のデータがあるかチェック
       for (const workerName of allWorkers) {
         try {
           const personalSheetName = await this.findPersonalSheet(workerName, ocrResult.ヘッダー.作業日!);
           if (personalSheetName) {
-            const existingRowIndex = await this.findExistingRowByDate(personalSheetName, workDate);
-            if (existingRowIndex > 0) {
-              console.log(`📋 ${personalSheetName} に ${workDate} のデータが存在 (行${existingRowIndex})`);
-              return true; // 一人でも既存データがあれば true を返す
-            } else {
-              console.log(`📋 ${personalSheetName} に ${workDate} のデータなし`);
-            }
+            const hasExistingData = await this.checkWorkerExistingData(personalSheetName, workDate);
+            existingDataMap[workerName] = hasExistingData;
+            console.log(`📋 ${personalSheetName} - ${workDate}: ${hasExistingData ? '既存データあり' : '新規データ'}`);
           } else {
             console.log(`⚠️ ${workerName} の個人シートが見つかりません`);
+            existingDataMap[workerName] = false; // シートがない場合は新規扱い
           }
         } catch (error) {
           console.warn(`⚠️ ${workerName} のデータチェック中にエラー:`, error);
-          // 個別のエラーは警告のみとし、処理を続行
+          existingDataMap[workerName] = false; // エラーの場合は新規扱い
         }
       }
       
-      console.log(`✅ ${workDate} の既存データなし（新規保存）`);
-      return false; // 誰も既存データがなければ false を返す
+      console.log(`✅ 既存データチェック完了:`, existingDataMap);
+      return existingDataMap;
     } catch (error) {
       console.error('❌ 既存データチェックエラー:', error);
       throw error;
+    }
+  }
+
+  /**
+   * 作業者の既存データをチェック（D,E,F,H,J,K,L,N列の値の有無で判定）
+   */
+  private static async checkWorkerExistingData(sheetName: string, workDate: string): Promise<boolean> {
+    try {
+      // まず該当日付の行を探す
+      const rowIndex = await this.findExistingRowByDate(sheetName, workDate);
+      if (rowIndex <= 0) {
+        return false; // 該当日付の行がなければ新規
+      }
+
+      // 該当行のD,E,F,H,J,K,L,N列のデータを取得
+      const response = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!D${rowIndex}:N${rowIndex}?key=${this.getConfig().googleApiKey}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.log(`❌ データ行取得API失敗: ${response.status} ${response.statusText}`);
+        return false;
+      }
+
+      const data = await response.json();
+      const values = data.values?.[0] || [];
+      
+      // D,E,F,H,J,K,L,N列のインデックス（D=0, E=1, F=2, H=4, J=6, K=7, L=8, N=10）
+      const checkColumns = [0, 1, 2, 4, 6, 7, 8, 10]; // D,E,F,H,J,K,L,N列
+      
+      // いずれかの列に値があるかチェック
+      const hasData = checkColumns.some(colIndex => {
+        const value = values[colIndex];
+        return value && value.toString().trim() !== '';
+      });
+
+      console.log(`📊 ${sheetName} 行${rowIndex} データチェック:`, values);
+      console.log(`📊 既存データ判定: ${hasData ? 'あり' : 'なし'}`);
+      
+      return hasData;
+    } catch (error) {
+      console.error('作業者既存データチェックエラー:', error);
+      return false;
     }
   }
 

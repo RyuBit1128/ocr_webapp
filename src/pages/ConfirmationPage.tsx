@@ -215,7 +215,7 @@ const ConfirmationPage: React.FC = () => {
     };
     setEditedData({
       ...editedData,
-      包装作業記録: [...editedData.包装作業記録, newRecord],
+      包装作業記録: [newRecord, ...editedData.包装作業記録],
     });
     setHasChanges(true);
   };
@@ -306,7 +306,7 @@ const ConfirmationPage: React.FC = () => {
     };
     setEditedData({
       ...editedData,
-      機械操作記録: [...editedData.機械操作記録, newRecord],
+      機械操作記録: [newRecord, ...editedData.機械操作記録],
     });
     setHasChanges(true);
   };
@@ -425,16 +425,24 @@ const ConfirmationPage: React.FC = () => {
     setIsSaving(true);
 
     try {
-      // 既存データの確認
-      const hasExistingData = await GoogleSheetsService.checkExistingData(editedData);
+      // 既存データの確認（個人ごとの判定）
+      const existingDataMap = await GoogleSheetsService.checkExistingData(editedData);
       
-      if (hasExistingData) {
-        // 既存データがある場合は確認ダイアログを表示
+      // 既存データがある作業者がいるかチェック
+      const hasAnyExistingData = Object.values(existingDataMap).some(hasData => hasData);
+      
+      if (hasAnyExistingData) {
+        // 既存データがある作業者がいる場合は確認ダイアログを表示
+        const existingWorkers = Object.entries(existingDataMap)
+          .filter(([_, hasData]) => hasData)
+          .map(([workerName, _]) => workerName);
+        
+        console.log(`📋 既存データがある作業者: ${existingWorkers.join(', ')}`);
         setOverwriteCallback(() => performSave);
         setConfirmDialogOpen(true);
         setIsSaving(false);
       } else {
-        // 既存データがない場合はそのまま保存
+        // 全員新規データの場合はそのまま保存
         await performSave();
       }
     } catch (error) {
@@ -522,8 +530,8 @@ const ConfirmationPage: React.FC = () => {
                       variant: "outlined",
                       sx: {
                         '& .MuiInputBase-root': {
-                          height: '56px',
-                          fontSize: '18px',
+                          height: '48px',
+                          fontSize: '16px',
                         }
                       }
                     }
@@ -538,8 +546,8 @@ const ConfirmationPage: React.FC = () => {
                 variant="outlined"
                 sx={{
                   '& .MuiInputBase-root': {
-                    height: '56px',
-                    fontSize: '18px',
+                    height: '40px',
+                    fontSize: '14px',
                   }
                 }}
               />
@@ -582,7 +590,7 @@ const ConfirmationPage: React.FC = () => {
                     }}
                     sx={{
                       '& .MuiInputBase-root': {
-                        fontSize: '18px',
+                        fontSize: '16px',
                       }
                     }}
                   />
@@ -601,7 +609,7 @@ const ConfirmationPage: React.FC = () => {
                     size="small"
                     color={(editedData.ヘッダー as any).productError ? 'error' : 
                            (getCorrectionInfo(editedData.ヘッダー, '商品名')?.confidence || 0) >= 0.9 ? 'success' : 'warning'}
-                    sx={{ height: '32px', fontSize: '16px' }}
+                    sx={{ height: '24px', fontSize: '13px' }}
                   />
                 </Box>
               )}
@@ -636,7 +644,7 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               startIcon={<PersonAdd />}
               onClick={addPackagingRecord}
-              sx={{ minHeight: '36px' }}
+              sx={{ minHeight: '28px', fontSize: '14px' }}
             >
               作業者追加
             </Button>
@@ -660,7 +668,7 @@ const ConfirmationPage: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
                   {/* 氏名 */}
                   <Box sx={{ flex: 2 }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       氏名
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -678,8 +686,8 @@ const ConfirmationPage: React.FC = () => {
                             helperText=''
                             sx={{
                               '& .MuiInputBase-root': {
-                                fontSize: '24px',
-                                height: '64px',
+                                fontSize: '16px',
+                                height: '40px',
                               },
                               '& .MuiOutlinedInput-root': {
                                 '& fieldset': {
@@ -706,14 +714,14 @@ const ConfirmationPage: React.FC = () => {
                           size="small"
                           color={worker.nameError ? 'error' : 
                                  worker.confidence && worker.confidence >= 0.9 ? 'success' : 'warning'}
-                          sx={{ height: '32px', fontSize: '16px' }}
+                          sx={{ height: '24px', fontSize: '13px' }}
                         />
                       </Box>
                     )}
                   </Box>
                   {/* 生産数 */}
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       生産数
                     </Typography>
                     <TextField
@@ -724,8 +732,8 @@ const ConfirmationPage: React.FC = () => {
                       placeholder="生産数"
                       sx={{
                         '& .MuiInputBase-root': {
-                          height: '64px',
-                          fontSize: '24px',
+                          height: '40px',
+                          fontSize: '16px',
                         }
                       }}
                     />
@@ -737,16 +745,16 @@ const ConfirmationPage: React.FC = () => {
                   {/* 時刻リスト */}
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary' }}>
+                      <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary' }}>
                         開始・終了時刻
                       </Typography>
                       <IconButton
                         onClick={() => addPackagingTimeSlot(index)}
                         size="small"
                         color="primary"
-                        sx={{ width: '48px', height: '48px' }}
+                        sx={{ width: '32px', height: '32px' }}
                       >
-                        <Add sx={{ fontSize: '28px' }} />
+                        <Add sx={{ fontSize: '20px' }} />
                       </IconButton>
                     </Box>
                     {worker.時刻リスト?.map((timeSlot, timeSlotIndex) => (
@@ -764,8 +772,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 800 → 8:00"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '64px',
-                              fontSize: '22px',
+                              height: '24px',
+                              fontSize: '18px',
                             }
                           }}
                         />
@@ -782,8 +790,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 1730 → 17:30"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '64px',
-                              fontSize: '22px',
+                              height: '24px',
+                              fontSize: '18px',
                             }
                           }}
                         />
@@ -792,9 +800,9 @@ const ConfirmationPage: React.FC = () => {
                             onClick={() => deletePackagingTimeSlot(index, timeSlotIndex)}
                             size="small"
                             color="error"
-                            sx={{ width: '48px', height: '48px' }}
+                            sx={{ width: '32px', height: '32px' }}
                           >
-                            <Delete sx={{ fontSize: '28px' }} />
+                            <Delete sx={{ fontSize: '18px' }} />
                           </IconButton>
                         )}
                       </Box>
@@ -805,10 +813,10 @@ const ConfirmationPage: React.FC = () => {
                 {/* 3行目：休憩と削除操作を横並び */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       休憩
                     </Typography>
-                    <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Stack direction="row" spacing={1.5} alignItems="center">
                       <Chip
                         label="昼休み"
                         size="small"
@@ -817,8 +825,10 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: worker.休憩.昼休み ? 600 : 400,
-                          fontSize: '16px',
-                          height: '40px',
+                          fontSize: '13px',
+                          height: '32px',
+                          minWidth: '80px',
+                          borderRadius: '16px',
                         }}
                       />
                       <Chip
@@ -829,14 +839,16 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: worker.休憩.中休み ? 600 : 400,
-                          fontSize: '16px',
-                          height: '40px',
+                          fontSize: '13px',
+                          height: '32px',
+                          minWidth: '80px',
+                          borderRadius: '16px',
                         }}
                       />
                     </Stack>
                   </Box>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       削除
                     </Typography>
                     <IconButton
@@ -871,9 +883,9 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               startIcon={<Add />}
               onClick={addMachineRecord}
-              sx={{ minHeight: '36px' }}
+              sx={{ minHeight: '28px', fontSize: '14px' }}
             >
-              操作者追加
+              作業者追加
             </Button>
           </Box>
           
@@ -895,7 +907,7 @@ const ConfirmationPage: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
                   {/* 氏名 */}
                   <Box sx={{ flex: 2 }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       氏名
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -913,8 +925,8 @@ const ConfirmationPage: React.FC = () => {
                             helperText=''
                             sx={{
                               '& .MuiInputBase-root': {
-                                fontSize: '24px',
-                                height: '64px',
+                                fontSize: '16px',
+                                height: '40px',
                               },
                               '& .MuiOutlinedInput-root': {
                                 '& fieldset': {
@@ -941,14 +953,14 @@ const ConfirmationPage: React.FC = () => {
                           size="small"
                           color={operation.nameError ? 'error' : 
                                  operation.confidence && operation.confidence >= 0.9 ? 'success' : 'warning'}
-                          sx={{ height: '32px', fontSize: '16px' }}
+                          sx={{ height: '24px', fontSize: '13px' }}
                         />
                       </Box>
                     )}
                   </Box>
                   {/* 生産数 */}
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       生産数
                     </Typography>
                     <TextField
@@ -959,8 +971,8 @@ const ConfirmationPage: React.FC = () => {
                       placeholder="生産数"
                       sx={{
                         '& .MuiInputBase-root': {
-                          height: '64px',
-                          fontSize: '24px',
+                          height: '40px',
+                          fontSize: '16px',
                         }
                       }}
                     />
@@ -972,16 +984,16 @@ const ConfirmationPage: React.FC = () => {
                   {/* 時刻リスト */}
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary' }}>
+                      <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary' }}>
                         開始・終了時刻
                       </Typography>
                       <IconButton
                         onClick={() => addMachineTimeSlot(index)}
                         size="small"
                         color="primary"
-                        sx={{ width: '48px', height: '48px' }}
+                        sx={{ width: '32px', height: '32px' }}
                       >
-                        <Add sx={{ fontSize: '28px' }} />
+                        <Add sx={{ fontSize: '20px' }} />
                       </IconButton>
                     </Box>
                     {operation.時刻リスト?.map((timeSlot, timeSlotIndex) => (
@@ -999,8 +1011,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 800 → 8:00"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '64px',
-                              fontSize: '22px',
+                              height: '24px',
+                              fontSize: '18px',
                             }
                           }}
                         />
@@ -1017,8 +1029,8 @@ const ConfirmationPage: React.FC = () => {
                           placeholder="例: 1730 → 17:30"
                           sx={{
                             '& .MuiInputBase-root': {
-                              height: '64px',
-                              fontSize: '22px',
+                              height: '24px',
+                              fontSize: '18px',
                             }
                           }}
                         />
@@ -1027,9 +1039,9 @@ const ConfirmationPage: React.FC = () => {
                             onClick={() => deleteMachineTimeSlot(index, timeSlotIndex)}
                             size="small"
                             color="error"
-                            sx={{ width: '48px', height: '48px' }}
+                            sx={{ width: '32px', height: '32px' }}
                           >
-                            <Delete sx={{ fontSize: '28px' }} />
+                            <Delete sx={{ fontSize: '18px' }} />
                           </IconButton>
                         )}
                       </Box>
@@ -1040,10 +1052,10 @@ const ConfirmationPage: React.FC = () => {
                 {/* 3行目：休憩と削除操作を横並び */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       休憩
                     </Typography>
-                    <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Stack direction="row" spacing={1.5} alignItems="center">
                       <Chip
                         label="昼休み"
                         size="small"
@@ -1052,8 +1064,10 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: operation.休憩.昼休み ? 600 : 400,
-                          fontSize: '16px',
-                          height: '40px',
+                          fontSize: '13px',
+                          height: '32px',
+                          minWidth: '80px',
+                          borderRadius: '16px',
                         }}
                       />
                       <Chip
@@ -1064,14 +1078,16 @@ const ConfirmationPage: React.FC = () => {
                         sx={{ 
                           cursor: 'pointer',
                           fontWeight: operation.休憩.中休み ? 600 : 400,
-                          fontSize: '16px',
-                          height: '40px',
+                          fontSize: '13px',
+                          height: '32px',
+                          minWidth: '80px',
+                          borderRadius: '16px',
                         }}
                       />
                     </Stack>
                   </Box>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                    <Typography variant="caption" sx={{ fontSize: '16px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       削除
                     </Typography>
                     <IconButton
@@ -1096,12 +1112,17 @@ const ConfirmationPage: React.FC = () => {
       </Card>
 
       {/* アクションボタン */}
-      <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+      <Box sx={{ display: 'flex', gap: 2, mt: 3, maxWidth: '393px', mx: 'auto' }}>
         <Button
           variant="outlined"
           onClick={handleBack}
           startIcon={<ArrowBack />}
-          sx={{ flex: 1 }}
+          sx={{ 
+            width: '160px',
+            height: '48px',
+            fontSize: '14px',
+            minWidth: '160px'
+          }}
         >
           やり直す
         </Button>
@@ -1109,7 +1130,12 @@ const ConfirmationPage: React.FC = () => {
           variant="contained"
           onClick={handleSave}
           startIcon={<Save />}
-          sx={{ flex: 2 }}
+          sx={{ 
+            width: '200px',
+            height: '48px',
+            fontSize: '14px',
+            minWidth: '200px'
+          }}
           disabled={isSaving}
         >
           {isSaving ? '保存中...' : '💾 保存する'}
