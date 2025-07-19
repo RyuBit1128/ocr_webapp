@@ -127,12 +127,15 @@ const ProcessingPage: React.FC = () => {
 
   const handleErrorConfirm = () => {
     console.log('確認ボタンが押されました');
-    // ダイアログを閉じる
+    // ローカル状態をリセット
     setErrorDialogOpen(false);
-    // 即座にデータをリセットして遷移
+    setHasProcessed(false);
+    setProgress(0);
+    setStatusMessage('画像を分析中...');
+    // グローバル状態をリセット
     resetData();
     // replaceを使って履歴を置き換え、確実に遷移
-    navigate('/', { replace: true });
+    navigate('/camera', { replace: true });
   };
 
   if (error) {

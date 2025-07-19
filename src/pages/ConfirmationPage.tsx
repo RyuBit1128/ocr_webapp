@@ -32,6 +32,7 @@ import {
   Edit,
   Warning,
 } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { useAppStore } from '@/stores/appStore';
 import { OcrResult, PackagingRecord, MachineOperationRecord } from '@/types';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
@@ -1129,7 +1130,7 @@ const ConfirmationPage: React.FC = () => {
         <Button
           variant="contained"
           onClick={handleSave}
-          startIcon={<Save />}
+          startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <Save />}
           sx={{ 
             width: '200px',
             height: '48px',
