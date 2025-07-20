@@ -1060,15 +1060,8 @@ export class GoogleSheetsService {
   ): Promise<void> {
     console.log(`➕ 行追加処理開始: ${sheetName}`);
     
-    // G、I、M、O列をundefinedに設定して、スプレッドシート側でスキップされるようにする
-    const adjustedRowData = [...rowData];
-    adjustedRowData[6] = undefined;  // G列
-    adjustedRowData[8] = undefined;  // I列
-    adjustedRowData[12] = undefined; // M列
-    adjustedRowData[14] = undefined; // O列
-    
-    // undefinedを除外した配列を作成（スプレッドシート側で数式列をスキップ）
-    const cleanRowData = adjustedRowData.map(val => val === undefined ? '' : val);
+    // スプレッドシートに送信するデータを準備（G、I、M、O列は後でスキップ）
+    const cleanRowData = [...rowData];
     
     // 最初の空行を探すために範囲を指定
     const response = await fetch(
