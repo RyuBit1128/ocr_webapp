@@ -337,10 +337,12 @@ const ConfirmationPage: React.FC = () => {
     if (!editedData) return;
 
     // バリデーションチェック
-    const hasProductError = (editedData.ヘッダー as any).productError;
+    const hasProductError = !editedData.ヘッダー.商品名 || 
+                           (editedData.ヘッダー as any).productError || 
+                           !masterData.products.includes(editedData.ヘッダー.商品名);
     const hasNameErrors = [
-      ...editedData.包装作業記録.map(r => r.nameError),
-      ...editedData.機械操作記録.map(r => r.nameError)
+      ...editedData.包装作業記録.map(r => !r.氏名 || r.nameError || !masterData.employees.includes(r.氏名)),
+      ...editedData.機械操作記録.map(r => !r.氏名 || r.nameError || !masterData.employees.includes(r.氏名))
     ].some(error => error);
 
     if (hasProductError || hasNameErrors) {
@@ -578,8 +580,8 @@ const ConfirmationPage: React.FC = () => {
                     {...params}
                     label="商品名"
                     variant="outlined"
-                    error={(editedData.ヘッダー as any).productError}
-                    helperText={(editedData.ヘッダー as any).productError ? 'スプレッドシートに登録されていない商品名です' : ''}
+                    error={!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)}
+                    helperText={!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名) ? 'スプレッドシートに登録されていない商品名です' : ''}
                     InputProps={{
                       ...params.InputProps,
                       endAdornment: (
@@ -592,6 +594,12 @@ const ConfirmationPage: React.FC = () => {
                     sx={{
                       '& .MuiInputBase-root': {
                         fontSize: '16px',
+                      },
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: (!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)) ? 'error.main' : undefined,
+                          borderWidth: (!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)) ? 2 : 1,
+                        },
                       }
                     }}
                   />
@@ -608,7 +616,7 @@ const ConfirmationPage: React.FC = () => {
                   <Chip
                     label={`${Math.round((getCorrectionInfo(editedData.ヘッダー, '商品名')?.confidence || 0) * 100)}%`}
                     size="small"
-                    color={(editedData.ヘッダー as any).productError ? 'error' : 
+                    color={(!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)) ? 'error' : 
                            (getCorrectionInfo(editedData.ヘッダー, '商品名')?.confidence || 0) >= 0.9 ? 'success' : 'warning'}
                     sx={{ height: '24px', fontSize: '13px' }}
                   />
