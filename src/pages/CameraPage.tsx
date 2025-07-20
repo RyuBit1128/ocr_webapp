@@ -8,37 +8,20 @@ import {
   Button,
   Alert,
   CircularProgress,
-  Divider,
   Stack,
 } from '@mui/material';
-import { CameraAlt, PhotoCamera, Refresh, Upload, CloudUpload } from '@mui/icons-material';
-import Webcam from 'react-webcam';
+import { CameraAlt, Upload, CloudUpload } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
 
 const CameraPage: React.FC = () => {
   const navigate = useNavigate();
-  const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   
-  const { setCapturedImage, setCurrentStep, resetData } = useAppStore();
+  const { setCapturedImage, setCurrentStep } = useAppStore();
 
-  // カメラ設定
-  const videoConstraints = {
-    width: 1280,
-    height: 720,
-    facingMode: { ideal: 'environment' }, // 背面カメラを優先
-  };
 
-  // 写真撮影
-  const capturePhoto = () => {
-    const imageSrc = webcamRef.current?.getScreenshot();
-    if (imageSrc) {
-      processImage(imageSrc);
-    }
-  };
 
   // ファイルアップロード
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,7 +43,6 @@ const CameraPage: React.FC = () => {
       reader.onload = (e) => {
         const result = e.target?.result as string;
         if (result) {
-          setUploadedImage(result);
           processImage(result);
         }
       };
@@ -85,121 +67,26 @@ const CameraPage: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  // カメラエラーハンドリング
-  const handleCameraError = (error: string | DOMException) => {
-    console.error('カメラエラー:', error);
-    setCameraError('カメラにアクセスできません。設定を確認してください。');
-  };
 
-  // データリセット
-  const handleReset = () => {
-    resetData();
-    setCameraError(null);
-    setIsCapturing(false);
-    setUploadedImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   return (
     <Box sx={{ textAlign: 'center' }}>
-      <Typography variant="h4" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-        📷 作業記録簿を読み取り
+      <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+        作業記録簿を読み取り
       </Typography>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          {cameraError ? (
-            <Box sx={{ py: 4 }}>
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {cameraError}
-              </Alert>
-              <Button
-                variant="outlined"
-                onClick={handleReset}
-                startIcon={<Refresh />}
-                size="large"
-              >
-                再試行
-              </Button>
-            </Box>
-          ) : uploadedImage ? (
-            <Box sx={{ position: 'relative' }}>
-              <img
-                src={uploadedImage}
-                alt="アップロードされた画像"
-                style={{
-                  width: '100%',
-                  maxWidth: '400px',
-                  height: 'auto',
-                  borderRadius: '12px',
-                }}
-              />
-              
-              {isCapturing && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'rgba(0,0,0,0.5)',
-                    borderRadius: '12px',
-                  }}
-                >
-                  <CircularProgress size={60} sx={{ color: 'white' }} />
-                </Box>
-              )}
-            </Box>
-          ) : (
-            <Box sx={{ position: 'relative' }}>
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                screenshotFormat="image/jpeg"
-                videoConstraints={videoConstraints}
-                onUserMediaError={handleCameraError}
-                style={{
-                  width: '100%',
-                  maxWidth: '400px',
-                  height: 'auto',
-                  borderRadius: '12px',
-                }}
-              />
-              
-              {isCapturing && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'rgba(0,0,0,0.5)',
-                    borderRadius: '12px',
-                  }}
-                >
-                  <CircularProgress size={60} sx={{ color: 'white' }} />
-                </Box>
-              )}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+      {cameraError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {cameraError}
+        </Alert>
+      )}
 
       {/* 隠しファイル入力 */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         onChange={handleFileUpload}
         style={{ display: 'none' }}
       />
@@ -209,47 +96,17 @@ const CameraPage: React.FC = () => {
         <Button
           variant="contained"
           size="large"
-          onClick={capturePhoto}
-          disabled={!!cameraError || isCapturing || !!uploadedImage}
-          startIcon={isCapturing ? <CircularProgress size={24} /> : <PhotoCamera />}
-          sx={{ 
-            minWidth: '200px',
-            bgcolor: isCapturing ? 'grey.400' : 'primary.main',
-          }}
-        >
-          {isCapturing ? '撮影中...' : '📸 撮影する'}
-        </Button>
-        
-        <Divider sx={{ my: 2 }}>または</Divider>
-        
-        <Button
-          variant="outlined"
-          size="large"
           onClick={openFileDialog}
           disabled={isCapturing}
-          startIcon={<CloudUpload />}
+          startIcon={isCapturing ? <CircularProgress size={24} /> : <CloudUpload />}
           sx={{ 
             minWidth: '200px',
-            borderWidth: 2,
-            '&:hover': {
-              borderWidth: 2,
-            },
           }}
         >
-          📁 ファイルを選択
+          {isCapturing ? '処理中...' : '📁 ファイルを選択 / 撮影する'}
         </Button>
       </Stack>
 
-      {uploadedImage && (
-        <Button
-          variant="text"
-          onClick={handleReset}
-          startIcon={<Refresh />}
-          sx={{ mb: 2 }}
-        >
-          リセット
-        </Button>
-      )}
 
       {/* 使用方法の説明 */}
       <Card sx={{ textAlign: 'left' }}>
