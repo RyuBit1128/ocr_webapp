@@ -976,18 +976,68 @@ export class GoogleSheetsService {
     rowIndex: number, 
     rowData: (string | number)[]
   ): Promise<void> {
-    console.log(`🔄 行更新API呼び出し: ${sheetName}!A${rowIndex}:P${rowIndex}`);
+    console.log(`🔄 行更新処理開始: ${sheetName} 行${rowIndex}`);
     
+    // バッチ更新用のリクエストを作成（G、I、M、O列をスキップ）
+    const requests = [];
+    
+    // A-F列（インデックス0-5）
+    if (rowData.slice(0, 6).some(val => val !== '')) {
+      requests.push({
+        range: `${sheetName}!A${rowIndex}:F${rowIndex}`,
+        values: [rowData.slice(0, 6)]
+      });
+    }
+    
+    // H列（インデックス7）
+    if (rowData[7] !== '') {
+      requests.push({
+        range: `${sheetName}!H${rowIndex}`,
+        values: [[rowData[7]]]
+      });
+    }
+    
+    // J-L列（インデックス9-11）
+    if (rowData.slice(9, 12).some(val => val !== '')) {
+      requests.push({
+        range: `${sheetName}!J${rowIndex}:L${rowIndex}`,
+        values: [rowData.slice(9, 12)]
+      });
+    }
+    
+    // N列（インデックス13）
+    if (rowData[13] !== '') {
+      requests.push({
+        range: `${sheetName}!N${rowIndex}`,
+        values: [[rowData[13]]]
+      });
+    }
+    
+    // P列（インデックス15）
+    if (rowData[15] !== '') {
+      requests.push({
+        range: `${sheetName}!P${rowIndex}`,
+        values: [[rowData[15]]]
+      });
+    }
+    
+    if (requests.length === 0) {
+      console.log('⚠️ 更新するデータがありません');
+      return;
+    }
+    
+    // バッチ更新実行
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A${rowIndex}:P${rowIndex}?valueInputOption=RAW&key=${this.getConfig().googleApiKey}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values:batchUpdate?key=${this.getConfig().googleApiKey}`,
       {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          values: [rowData],
+          valueInputOption: 'RAW',
+          data: requests
         }),
       }
     );
@@ -1008,10 +1058,81 @@ export class GoogleSheetsService {
     sheetName: string, 
     rowData: (string | number)[]
   ): Promise<void> {
-    console.log(`➕ 行追加API呼び出し: ${sheetName}!A:P`);
+    console.log(`➕ 行追加処理開始: ${sheetName}`);
     
+    // G、I、M、O列をundefinedに設定して、スプレッドシート側でスキップされるようにする
+    const adjustedRowData = [...rowData];
+    adjustedRowData[6] = undefined;  // G列
+    adjustedRowData[8] = undefined;  // I列
+    adjustedRowData[12] = undefined; // M列
+    adjustedRowData[14] = undefined; // O列
+    
+    // undefinedを除外した配列を作成（スプレッドシート側で数式列をスキップ）
+    const cleanRowData = adjustedRowData.map(val => val === undefined ? '' : val);
+    
+    // 最初の空行を探すために範囲を指定
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A:P:append?valueInputOption=RAW&key=${this.getConfig().googleApiKey}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A:A?key=${this.getConfig().googleApiKey}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('シート情報の取得に失敗しました');
+    }
+    
+    const data = await response.json();
+    const nextRow = (data.values?.length || 0) + 1;
+    
+    // バッチ更新でG、I、M、O列をスキップして追加
+    const requests = [];
+    
+    // A-F列
+    if (cleanRowData.slice(0, 6).some(val => val !== '')) {
+      requests.push({
+        range: `${sheetName}!A${nextRow}:F${nextRow}`,
+        values: [cleanRowData.slice(0, 6)]
+      });
+    }
+    
+    // H列
+    if (cleanRowData[7] !== '') {
+      requests.push({
+        range: `${sheetName}!H${nextRow}`,
+        values: [[cleanRowData[7]]]
+      });
+    }
+    
+    // J-L列
+    if (cleanRowData.slice(9, 12).some(val => val !== '')) {
+      requests.push({
+        range: `${sheetName}!J${nextRow}:L${nextRow}`,
+        values: [cleanRowData.slice(9, 12)]
+      });
+    }
+    
+    // N列
+    if (cleanRowData[13] !== '') {
+      requests.push({
+        range: `${sheetName}!N${nextRow}`,
+        values: [[cleanRowData[13]]]
+      });
+    }
+    
+    // P列
+    if (cleanRowData[15] !== '') {
+      requests.push({
+        range: `${sheetName}!P${nextRow}`,
+        values: [[cleanRowData[15]]]
+      });
+    }
+    
+    // バッチ更新実行
+    const updateResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values:batchUpdate?key=${this.getConfig().googleApiKey}`,
       {
         method: 'POST',
         headers: {
@@ -1019,20 +1140,19 @@ export class GoogleSheetsService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          values: [rowData],
+          valueInputOption: 'RAW',
+          data: requests
         }),
       }
     );
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error(`❌ 行追加API失敗: ${response.status} ${response.statusText}`, errorData);
-      throw new Error(`行追加エラー: ${errorData.error?.message || response.statusText}`);
+    if (!updateResponse.ok) {
+      const errorData = await updateResponse.json().catch(() => ({}));
+      console.error(`❌ 行追加API失敗: ${updateResponse.status} ${updateResponse.statusText}`, errorData);
+      throw new Error(`行追加エラー: ${errorData.error?.message || updateResponse.statusText}`);
     }
     
-    const responseData = await response.json();
-    const updatedRange = responseData.updates?.updatedRange;
-    console.log(`✅ 行追加API成功: ${sheetName} - 追加範囲: ${updatedRange}`);
+    console.log(`✅ 行追加API成功: ${sheetName} - 行${nextRow}に追加`);
   }
 
   /**

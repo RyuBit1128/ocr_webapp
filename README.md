@@ -128,8 +128,16 @@ npm run lint:fix
 4. スコープの設定：
    - 「スコープを追加または削除」をクリック
    - `https://www.googleapis.com/auth/spreadsheets` を選択
-5. テストユーザー：必要に応じて追加
+5. テストユーザーの設定（重要）：
+   - 「テストユーザーを追加」をクリック
+   - 使用するGoogleアカウントのメールアドレスを追加（例：r.hy.r.1128@gmail.com）
+   - 最大100人まで追加可能
 6. 「保存して次へ」で完了
+
+**注意事項：**
+- テストモードの場合、登録したテストユーザーのみがアプリを使用できます
+- 本番公開する場合は「公開ステータス」を「本番環境」に変更する必要があります
+- 本番環境への変更にはGoogleの審査が必要な場合があります
 
 #### 4. OAuth 2.0 クライアントIDの作成（VITE_GOOGLE_CLIENT_ID）
 1. 「APIとサービス」→「認証情報」を選択
@@ -138,8 +146,10 @@ npm run lint:fix
 4. 名前：任意（例：作業記録簿OCR Web Client）
 5. 承認済みのJavaScript生成元に以下を追加：
    - `http://localhost:5173` （開発環境用）
-   - `https://ryubit1128.github.io` （本番環境用）
-6. 作成後、クライアントIDをコピー
+   - `https://[your-github-username].github.io` （本番環境用、例：`https://ryubit1128.github.io`）
+   - 注：サブパス（/ocr_0714_V2など）は含めない
+6. 承認済みのリダイレクトURI：設定不要（暗黙的フローを使用するため）
+7. 作成後、クライアントIDをコピー
 
 #### 5. APIキーの作成（VITE_GOOGLE_API_KEY）
 1. 「APIとサービス」→「認証情報」を選択
