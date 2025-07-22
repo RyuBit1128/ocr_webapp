@@ -120,12 +120,19 @@ const ConfirmationPage: React.FC = () => {
 
   // ヘッダー情報の更新
   const updateHeader = (field: string, value: string) => {
+    const updatedHeader = {
+      ...editedData.ヘッダー,
+      [field]: value,
+    };
+    
+    // 商品名を更新した場合、productErrorをクリア
+    if (field === '商品名' && masterData.products.includes(value)) {
+      delete (updatedHeader as any).productError;
+    }
+    
     setEditedData({
       ...editedData,
-      ヘッダー: {
-        ...editedData.ヘッダー,
-        [field]: value,
-      },
+      ヘッダー: updatedHeader,
     });
     setHasChanges(true);
   };
@@ -133,10 +140,17 @@ const ConfirmationPage: React.FC = () => {
   // 包装作業記録の更新
   const updatePackagingRecord = (index: number, field: keyof PackagingRecord, value: any) => {
     const newRecords = [...editedData.包装作業記録];
-    newRecords[index] = {
+    const updatedRecord = {
       ...newRecords[index],
       [field]: value,
     };
+    
+    // 氏名を更新した場合、nameErrorをクリア
+    if (field === '氏名' && masterData.employees.includes(value)) {
+      delete (updatedRecord as any).nameError;
+    }
+    
+    newRecords[index] = updatedRecord;
     setEditedData({
       ...editedData,
       包装作業記録: newRecords,
@@ -224,10 +238,17 @@ const ConfirmationPage: React.FC = () => {
   // 機械操作記録の更新
   const updateMachineRecord = (index: number, field: keyof MachineOperationRecord, value: any) => {
     const newRecords = [...editedData.機械操作記録];
-    newRecords[index] = {
+    const updatedRecord = {
       ...newRecords[index],
       [field]: value,
     };
+    
+    // 氏名を更新した場合、nameErrorをクリア
+    if (field === '氏名' && masterData.employees.includes(value)) {
+      delete (updatedRecord as any).nameError;
+    }
+    
+    newRecords[index] = updatedRecord;
     setEditedData({
       ...editedData,
       機械操作記録: newRecords,
