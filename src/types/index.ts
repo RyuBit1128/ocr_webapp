@@ -1,3 +1,6 @@
+// 確認状態の型定義
+export type ConfirmationStatus = 'pending' | 'approved' | 'editing';
+
 // ヘッダー情報の型定義
 export interface HeaderInfo {
   作業日?: string; // OCRで読み取らないため、オプショナルに
@@ -9,6 +12,8 @@ export interface HeaderInfo {
   productConfidence?: number;
   productMatchType?: 'exact' | 'fuzzy' | 'no_match';
   productError?: boolean;
+  // 確認状態
+  productConfirmationStatus?: ConfirmationStatus;
 }
 
 // 休憩情報の型定義
@@ -37,6 +42,8 @@ export interface PackagingRecord {
   matchType?: 'exact' | 'lastname' | 'fuzzy' | 'no_match';
   isLastNameMatch?: boolean;
   nameError?: boolean;
+  // 確認状態
+  nameConfirmationStatus?: ConfirmationStatus;
 }
 
 // 機械操作記録の型定義
@@ -53,6 +60,8 @@ export interface MachineOperationRecord {
   matchType?: 'exact' | 'lastname' | 'fuzzy' | 'no_match';
   isLastNameMatch?: boolean;
   nameError?: boolean;
+  // 確認状態
+  nameConfirmationStatus?: ConfirmationStatus;
 }
 
 // OCR結果の型定義

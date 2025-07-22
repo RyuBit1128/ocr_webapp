@@ -170,7 +170,7 @@ export class GoogleSheetsService {
 
   /**
    * マスターデータ（従業員・商品一覧）を取得
-   * 従業員マスターのA列：氏名、B列：商品名から取得
+   * 管理シートのA2列以降：氏名、B2列以降：商品名から取得（ヘッダー行除外）
    */
   static async getMasterData(): Promise<{
     employees: string[];
@@ -179,9 +179,9 @@ export class GoogleSheetsService {
     await this.ensureAuthenticated();
 
     try {
-      // 管理シートからA列とB列を取得
+      // 管理シートからA列とB列を取得（ヘッダー行を除外するため2行目から）
       const masterDataResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/管理!A:B?key=${this.getConfig().googleApiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/管理!A2:B?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -220,6 +220,8 @@ export class GoogleSheetsService {
         employees: employees.length,
         products: products.length,
       });
+      console.log('👥 マスターデータ従業員一覧:', employees);
+      console.log('📦 マスターデータ商品一覧:', products);
 
       return { employees, products };
 

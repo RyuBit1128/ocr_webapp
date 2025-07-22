@@ -23,7 +23,6 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/ja';
 import {
-  CheckCircle,
   Save,
   ArrowBack,
   Delete,
@@ -31,10 +30,13 @@ import {
   PersonAdd,
   Edit,
   Warning,
+  Check,
+  HelpOutline,
+  Close,
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { useAppStore } from '@/stores/appStore';
-import { OcrResult, PackagingRecord, MachineOperationRecord } from '@/types';
+import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus } from '@/types';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { useMasterData } from '@/hooks/useMasterData';
 
@@ -50,6 +52,14 @@ const ConfirmationPage: React.FC = () => {
   const [failedWorkers, setFailedWorkers] = useState<string[]>([]);
   const [missingSheetDialogOpen, setMissingSheetDialogOpen] = useState(false);
   const [missingSheetMessage, setMissingSheetMessage] = useState('');
+  
+  // 確認ポップアップ用の状態
+  const [confirmPopupOpen, setConfirmPopupOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    type: 'product' | 'packaging' | 'machine';
+    index?: number;
+    value: string;
+  } | null>(null);
 
   // 時間フォーマット関数
   const formatTimeInput = (input: string): string => {
@@ -68,15 +78,21 @@ const ConfirmationPage: React.FC = () => {
     }
   };
 
-  // 時刻リストの初期化（すべてのプロパティを保持）
+  // 時刻リストの初期化と確認状態の設定
   const initializeTimeSlots = (record: any): any => {
-    if (!record.時刻リスト) {
-      return {
-        ...record, // すべてのプロパティ（nameError, confidence等）を保持
-        時刻リスト: [{ 開始時刻: record.開始時刻, 終了時刻: record.終了時刻 }]
-      };
+    const baseRecord = {
+      ...record, // すべてのプロパティ（nameError, confidence等）を保持
+      時刻リスト: record.時刻リスト || [{ 開始時刻: record.開始時刻, 終了時刻: record.終了時刻 }]
+    };
+    
+    // 確認状態の初期化（エラーがある場合はpending、ない場合はapproved）
+    if (record.nameError) {
+      baseRecord.nameConfirmationStatus = 'pending';
+    } else {
+      baseRecord.nameConfirmationStatus = 'approved';
     }
-    return { ...record }; // すべてのプロパティを保持してコピー
+    
+    return baseRecord;
   };
 
   // OCR結果がない場合はカメラページに戻る
@@ -94,6 +110,11 @@ const ConfirmationPage: React.FC = () => {
     // 先に時刻リストを初期化してから空レコードを除外（nameErrorプロパティを保持するため）
     const initializedData = {
       ...ocrResult,
+      ヘッダー: {
+        ...ocrResult.ヘッダー,
+        // 商品名の確認状態を初期化
+        productConfirmationStatus: ((ocrResult.ヘッダー as any).productError ? 'pending' : 'approved') as ConfirmationStatus
+      },
       包装作業記録: filterEmptyRecords((ocrResult.包装作業記録 || []).map(initializeTimeSlots)),
       機械操作記録: filterEmptyRecords((ocrResult.機械操作記録 || []).map(initializeTimeSlots)),
     };
@@ -176,6 +197,90 @@ const ConfirmationPage: React.FC = () => {
     setEditedData({
       ...editedData,
       ヘッダー: updatedHeader,
+    });
+    setHasChanges(true);
+  };
+
+  // 確認ポップアップを開く
+  const openConfirmPopup = (type: 'product' | 'packaging' | 'machine', value: string, index?: number) => {
+    setConfirmTarget({ type, value, index });
+    setConfirmPopupOpen(true);
+  };
+
+  // 確認ポップアップを閉じる
+  const closeConfirmPopup = () => {
+    setConfirmPopupOpen(false);
+    setConfirmTarget(null);
+  };
+
+  // 確認ポップアップでOKが選択された場合
+  const handleConfirmOK = () => {
+    if (!confirmTarget) return;
+    
+    if (confirmTarget.type === 'product') {
+      updateProductConfirmationStatus('approved');
+    } else if (confirmTarget.type === 'packaging' && confirmTarget.index !== undefined) {
+      updatePackagingNameConfirmationStatus(confirmTarget.index, 'approved');
+    } else if (confirmTarget.type === 'machine' && confirmTarget.index !== undefined) {
+      updateMachineNameConfirmationStatus(confirmTarget.index, 'approved');
+    }
+    
+    closeConfirmPopup();
+  };
+
+  // 確認ポップアップで修正が選択された場合
+  const handleConfirmEdit = () => {
+    if (!confirmTarget) return;
+    
+    if (confirmTarget.type === 'product') {
+      updateProductConfirmationStatus('editing');
+    } else if (confirmTarget.type === 'packaging' && confirmTarget.index !== undefined) {
+      updatePackagingNameConfirmationStatus(confirmTarget.index, 'editing');
+    } else if (confirmTarget.type === 'machine' && confirmTarget.index !== undefined) {
+      updateMachineNameConfirmationStatus(confirmTarget.index, 'editing');
+    }
+    
+    closeConfirmPopup();
+  };
+
+  // 商品名の確認状態を更新
+  const updateProductConfirmationStatus = (status: ConfirmationStatus) => {
+    const updatedHeader = {
+      ...editedData.ヘッダー,
+      productConfirmationStatus: status,
+    };
+    
+    setEditedData({
+      ...editedData,
+      ヘッダー: updatedHeader,
+    });
+    setHasChanges(true);
+  };
+
+  // 包装作業記録の確認状態を更新
+  const updatePackagingNameConfirmationStatus = (index: number, status: ConfirmationStatus) => {
+    const newRecords = [...editedData.包装作業記録];
+    newRecords[index] = {
+      ...newRecords[index],
+      nameConfirmationStatus: status,
+    };
+    setEditedData({
+      ...editedData,
+      包装作業記録: newRecords,
+    });
+    setHasChanges(true);
+  };
+
+  // 機械操作記録の確認状態を更新
+  const updateMachineNameConfirmationStatus = (index: number, status: ConfirmationStatus) => {
+    const newRecords = [...editedData.機械操作記録];
+    newRecords[index] = {
+      ...newRecords[index],
+      nameConfirmationStatus: status,
+    };
+    setEditedData({
+      ...editedData,
+      機械操作記録: newRecords,
     });
     setHasChanges(true);
   };
@@ -361,14 +466,29 @@ const ConfirmationPage: React.FC = () => {
 
   // 機械操作記録の追加
   const addMachineRecord = () => {
-    const newRecord: MachineOperationRecord = {
-      氏名: '',
-      開始時刻: '8:00',
-      終了時刻: '17:00',
-      時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
-      休憩: { 昼休み: false, 中休み: false },
-      生産数: '0',
-    };
+    let newRecord: MachineOperationRecord;
+    
+    // 既存の機械操作記録がある場合は、最初のレコードをベースにコピー
+    if (editedData.機械操作記録.length > 0) {
+      const firstRecord = editedData.機械操作記録[0];
+      newRecord = {
+        ...firstRecord, // 全ての情報をコピー
+        氏名: '', // 氏名のみ空白に設定
+        nameConfirmationStatus: 'pending' as ConfirmationStatus // 確認状態をpendingに設定
+      };
+    } else {
+      // 機械操作記録が空の場合はデフォルト値を使用
+      newRecord = {
+        氏名: '',
+        開始時刻: '8:00',
+        終了時刻: '17:00',
+        時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
+        休憩: { 昼休み: false, 中休み: false },
+        生産数: '0',
+        nameConfirmationStatus: 'pending' as ConfirmationStatus
+      };
+    }
+    
     setEditedData({
       ...editedData,
       機械操作記録: [newRecord, ...editedData.機械操作記録],
@@ -400,17 +520,27 @@ const ConfirmationPage: React.FC = () => {
   const handleSave = async () => {
     if (!editedData) return;
 
-    // バリデーションチェック
-    const hasProductError = !editedData.ヘッダー.商品名 || 
-                           (editedData.ヘッダー as any).productError || 
-                           !masterData.products.includes(editedData.ヘッダー.商品名);
-    const hasNameErrors = [
-      ...editedData.包装作業記録.map(r => !r.氏名 || r.nameError || !masterData.employees.includes(r.氏名)),
-      ...editedData.機械操作記録.map(r => !r.氏名 || r.nameError || !masterData.employees.includes(r.氏名))
-    ].some(error => error);
+    // 確認状態ベースのバリデーションチェック
+    const hasPendingProduct = editedData.ヘッダー.productConfirmationStatus === 'pending';
+    const hasPendingNames = [
+      ...editedData.包装作業記録.map(r => r.nameConfirmationStatus === 'pending'),
+      ...editedData.機械操作記録.map(r => r.nameConfirmationStatus === 'pending')
+    ].some(isPending => isPending);
 
-    if (hasProductError || hasNameErrors) {
-      alert('エラーがあるデータは保存できません。赤色で表示されている項目を修正してください。');
+    if (hasPendingProduct || hasPendingNames) {
+      alert('未確認の項目があります。赤色で表示されている項目の「✓ OK」または「✏️ 修正」ボタンを押して確認してください。');
+      return;
+    }
+
+    // 編集中の項目がある場合のチェック
+    const hasEditingItems = [
+      editedData.ヘッダー.productConfirmationStatus === 'editing',
+      ...editedData.包装作業記録.map(r => r.nameConfirmationStatus === 'editing'),
+      ...editedData.機械操作記録.map(r => r.nameConfirmationStatus === 'editing')
+    ].some(isEditing => isEditing);
+
+    if (hasEditingItems) {
+      alert('編集中の項目があります。編集を完了してから保存してください。');
       return;
     }
 
@@ -551,13 +681,7 @@ const ConfirmationPage: React.FC = () => {
     return null;
   };
 
-  // 信頼度に基づいたアイコン表示
-  const getConfidenceIcon = (confidence?: number) => {
-    if (!confidence) return null;
-    if (confidence >= 0.9) return <CheckCircle color="success" fontSize="small" />;
-    if (confidence >= 0.7) return <Warning color="warning" fontSize="small" />;
-    return <Warning color="error" fontSize="small" />;
-  };
+
 
   return (
     <Box>
@@ -633,45 +757,109 @@ const ConfirmationPage: React.FC = () => {
               }}
             />
             <Box>
-              <Autocomplete
-                options={masterData.products}
-                value={editedData.ヘッダー.商品名}
-                onChange={(_, newValue) => {
-                  updateHeader('商品名', newValue || '');
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="商品名"
-                    variant="outlined"
-                    error={!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)}
-                    helperText={!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名) ? 'スプレッドシートに登録されていない商品名です' : ''}
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: (
-                        <>
-                          {params.InputProps.endAdornment}
-                          {getConfidenceIcon((editedData.ヘッダー as any).productConfidence)}
-                        </>
-                      ),
+              {editedData.ヘッダー.productConfirmationStatus === 'editing' ? (
+                // 編集状態：ドロップダウンを表示
+                <Box>
+                  <Autocomplete
+                    options={masterData.products}
+                    value={editedData.ヘッダー.商品名}
+                    onChange={(_, newValue) => {
+                      // 一度に全ての状態を更新（競合回避）
+                      const updatedHeader = {
+                        ...editedData.ヘッダー,
+                        商品名: newValue || '',
+                      };
+                      
+                      // productErrorクリアと確認状態の設定
+                      if (newValue && masterData.products.includes(newValue)) {
+                        delete (updatedHeader as any).productError;
+                        updatedHeader.productConfirmationStatus = 'approved';
+                      } else {
+                        updatedHeader.productConfirmationStatus = 'editing';
+                      }
+                      
+                      setEditedData({
+                        ...editedData,
+                        ヘッダー: updatedHeader,
+                      });
+                      setHasChanges(true);
                     }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="商品名"
+                        variant="outlined"
+                        helperText="正しい商品名を選択してください"
+                        sx={{
+                          '& .MuiInputBase-root': {
+                            fontSize: '16px',
+                          }
+                        }}
+                      />
+                    )}
+                    freeSolo
+                    fullWidth
+                    disabled={masterDataLoading}
+                  />
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="small"
+                      onClick={() => updateProductConfirmationStatus('approved')}
+                      disabled={!editedData.ヘッダー.商品名 || !masterData.products.includes(editedData.ヘッダー.商品名)}
+                    >
+                      確定
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => updateProductConfirmationStatus('pending')}
+                    >
+                      キャンセル
+                    </Button>
+                  </Box>
+                </Box>
+              ) : (
+                // 通常表示：商品名とステータスボタン
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <TextField
+                    label="商品名"
+                    value={editedData.ヘッダー.商品名}
+                    variant="outlined"
+                    fullWidth
+                    disabled
                     sx={{
                       '& .MuiInputBase-root': {
                         fontSize: '16px',
-                      },
-                      '& .MuiOutlinedInput-root': {
-                        '& fieldset': {
-                          borderColor: (!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)) ? 'error.main' : undefined,
-                          borderWidth: (!editedData.ヘッダー.商品名 || (editedData.ヘッダー as any).productError || !masterData.products.includes(editedData.ヘッダー.商品名)) ? 2 : 1,
-                        },
                       }
                     }}
                   />
-                )}
-                freeSolo
-                fullWidth
-                disabled={masterDataLoading}
-              />
+                  {editedData.ヘッダー.productConfirmationStatus === 'pending' ? (
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      size="small"
+                      startIcon={<HelpOutline />}
+                      onClick={() => openConfirmPopup('product', editedData.ヘッダー.商品名)}
+                      sx={{ minWidth: '80px', whiteSpace: 'nowrap' }}
+                    >
+                      確認
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="small"
+                      startIcon={<Check />}
+                      onClick={() => updateProductConfirmationStatus('editing')}
+                      sx={{ minWidth: '60px', whiteSpace: 'nowrap' }}
+                    >
+                      OK
+                    </Button>
+                  )}
+                </Box>
+              )}
               {getCorrectionInfo(editedData.ヘッダー, '商品名') && (
                 <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="caption" color="primary">
@@ -737,36 +925,49 @@ const ConfirmationPage: React.FC = () => {
                   borderTopColor: 'primary.main',
                 }}
               >
-                {/* 1行目：氏名と生産数を横並び */}
-                <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
-                  {/* 氏名 */}
-                  <Box sx={{ flex: 2 }}>
-                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      氏名
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {/* 1行目：氏名とOK/確認ボタンを横並び */}
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    氏名
+                  </Typography>
+                  {worker.nameConfirmationStatus === 'editing' ? (
+                    // 編集状態：ドロップダウンを表示
+                    <Box>
                       <Autocomplete
                         options={masterData.employees}
                         value={worker.氏名}
                         onChange={(_, newValue) => {
-                          updatePackagingRecord(index, '氏名', newValue || '');
+                          // 一度に全ての状態を更新（競合回避）
+                          const newRecords = [...editedData.包装作業記録];
+                          const updatedRecord = {
+                            ...newRecords[index],
+                            氏名: newValue || '',
+                          };
+                          
+                          // nameErrorクリアと確認状態の設定
+                          if (newValue && masterData.employees.includes(newValue)) {
+                            delete (updatedRecord as any).nameError;
+                            updatedRecord.nameConfirmationStatus = 'approved';
+                          } else {
+                            updatedRecord.nameConfirmationStatus = 'editing';
+                          }
+                          
+                          newRecords[index] = updatedRecord;
+                          setEditedData({
+                            ...editedData,
+                            包装作業記録: newRecords,
+                          });
+                          setHasChanges(true);
                         }}
                         renderInput={(params) => (
                           <TextField
                             {...params}
                             variant="outlined"
-                            error={!worker.氏名 || worker.nameError}
-                            helperText=''
+                            helperText="正しい氏名を選択してください"
                             sx={{
                               '& .MuiInputBase-root': {
-                                fontSize: '16px',
-                                height: '40px',
-                              },
-                              '& .MuiOutlinedInput-root': {
-                                '& fieldset': {
-                                  borderColor: (!worker.氏名 || worker.nameError || !masterData.employees.includes(worker.氏名)) ? 'error.main' : undefined,
-                                  borderWidth: (!worker.氏名 || worker.nameError || !masterData.employees.includes(worker.氏名)) ? 2 : 1,
-                                },
+                                fontSize: '14px',
+                                height: '36px',
                               }
                             }}
                           />
@@ -775,42 +976,81 @@ const ConfirmationPage: React.FC = () => {
                         fullWidth
                         disabled={masterDataLoading}
                       />
-                      {getConfidenceIcon(worker.confidence)}
-                    </Box>
-                    {worker.originalName && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                        <Typography variant="caption" color="primary">
-                          元: {worker.originalName}
-                        </Typography>
-                        <Chip
-                          label={`${Math.round((worker.confidence || 0) * 100)}%`}
+                      <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5 }}>
+                        <Button
+                          variant="contained"
+                          color="success"
                           size="small"
-                          color={worker.nameError ? 'error' : 
-                                 worker.confidence && worker.confidence >= 0.9 ? 'success' : 'warning'}
-                          sx={{ height: '24px', fontSize: '13px' }}
-                        />
+                          onClick={() => updatePackagingNameConfirmationStatus(index, 'approved')}
+                          disabled={!worker.氏名 || !masterData.employees.includes(worker.氏名)}
+                          sx={{ fontSize: '11px' }}
+                        >
+                          確定
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => updatePackagingNameConfirmationStatus(index, 'pending')}
+                          sx={{ fontSize: '11px' }}
+                        >
+                          戻る
+                        </Button>
                       </Box>
-                    )}
-                  </Box>
-                  {/* 生産数 */}
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      生産数
-                    </Typography>
-                    <TextField
-                      value={worker.生産数}
-                      onChange={(e) => updatePackagingRecord(index, '生産数', e.target.value)}
-                      fullWidth
-                      type="number"
-                      placeholder="生産数"
-                      sx={{
-                        '& .MuiInputBase-root': {
-                          height: '40px',
-                          fontSize: '16px',
-                        }
-                      }}
-                    />
-                  </Box>
+                    </Box>
+                  ) : (
+                    // 通常表示：氏名とステータスボタンを横並び
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <TextField
+                        value={worker.氏名}
+                        variant="outlined"
+                        disabled
+                        fullWidth
+                        sx={{
+                          '& .MuiInputBase-root': {
+                            fontSize: '14px',
+                            height: '36px',
+                          }
+                        }}
+                      />
+                      {worker.nameConfirmationStatus === 'pending' ? (
+                        <Button
+                          variant="contained"
+                          color="warning"
+                          size="small"
+                          startIcon={<HelpOutline />}
+                          onClick={() => openConfirmPopup('packaging', worker.氏名, index)}
+                          sx={{ minWidth: '60px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                        >
+                          確認
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="contained"
+                          color="success"
+                          size="small"
+                          startIcon={<Check />}
+                          onClick={() => updatePackagingNameConfirmationStatus(index, 'editing')}
+                          sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                        >
+                          OK
+                        </Button>
+                      )}
+                    </Box>
+                  )}
+                  {worker.originalName && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                      <Typography variant="caption" color="primary">
+                        元: {worker.originalName}
+                      </Typography>
+                      <Chip
+                        label={`${Math.round((worker.confidence || 0) * 100)}%`}
+                        size="small"
+                        color={worker.nameError ? 'error' : 
+                               worker.confidence && worker.confidence >= 0.9 ? 'success' : 'warning'}
+                        sx={{ height: '24px', fontSize: '13px' }}
+                      />
+                    </Box>
+                  )}
                 </Box>
                 
                 {/* 2行目：開始時刻、終了時刻、休憩 */}
@@ -883,13 +1123,14 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 </Box>
                 
-                {/* 3行目：休憩と削除操作を横並び */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                {/* 3行目：休憩（縦並び）と生産数を横並び */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  {/* 休憩（縦並び） */}
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       休憩
                     </Typography>
-                    <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Stack direction="column" spacing={1} alignItems="flex-start">
                       <Chip
                         label="昼休み"
                         size="small"
@@ -920,6 +1161,28 @@ const ConfirmationPage: React.FC = () => {
                       />
                     </Stack>
                   </Box>
+                  
+                  {/* 生産数 */}
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      生産数
+                    </Typography>
+                    <TextField
+                      value={worker.生産数}
+                      onChange={(e) => updatePackagingRecord(index, '生産数', e.target.value)}
+                      fullWidth
+                      type="number"
+                      placeholder="生産数"
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          height: '40px',
+                          fontSize: '16px',
+                        }
+                      }}
+                    />
+                  </Box>
+                  
+                  {/* 削除ボタン */}
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                     <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       削除
@@ -976,36 +1239,49 @@ const ConfirmationPage: React.FC = () => {
                   borderTopColor: 'primary.main',
                 }}
               >
-                {/* 1行目：氏名と生産数を横並び */}
-                <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
-                  {/* 氏名 */}
-                  <Box sx={{ flex: 2 }}>
-                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      氏名
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {/* 1行目：氏名とOK/確認ボタンを横並び */}
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                    氏名
+                  </Typography>
+                  {operation.nameConfirmationStatus === 'editing' ? (
+                    // 編集状態：ドロップダウンを表示
+                    <Box>
                       <Autocomplete
                         options={masterData.employees}
                         value={operation.氏名}
                         onChange={(_, newValue) => {
-                          updateMachineRecord(index, '氏名', newValue || '');
+                          // 一度に全ての状態を更新（競合回避）
+                          const newRecords = [...editedData.機械操作記録];
+                          const updatedRecord = {
+                            ...newRecords[index],
+                            氏名: newValue || '',
+                          };
+                          
+                          // nameErrorクリアと確認状態の設定
+                          if (newValue && masterData.employees.includes(newValue)) {
+                            delete (updatedRecord as any).nameError;
+                            updatedRecord.nameConfirmationStatus = 'approved';
+                          } else {
+                            updatedRecord.nameConfirmationStatus = 'editing';
+                          }
+                          
+                          newRecords[index] = updatedRecord;
+                          setEditedData({
+                            ...editedData,
+                            機械操作記録: newRecords,
+                          });
+                          setHasChanges(true);
                         }}
                         renderInput={(params) => (
                           <TextField
                             {...params}
                             variant="outlined"
-                            error={!operation.氏名 || operation.nameError}
-                            helperText=''
+                            helperText="正しい氏名を選択してください"
                             sx={{
                               '& .MuiInputBase-root': {
-                                fontSize: '16px',
-                                height: '40px',
-                              },
-                              '& .MuiOutlinedInput-root': {
-                                '& fieldset': {
-                                  borderColor: (!operation.氏名 || operation.nameError || !masterData.employees.includes(operation.氏名)) ? 'error.main' : undefined,
-                                  borderWidth: (!operation.氏名 || operation.nameError || !masterData.employees.includes(operation.氏名)) ? 2 : 1,
-                                },
+                                fontSize: '14px',
+                                height: '36px',
                               }
                             }}
                           />
@@ -1014,42 +1290,81 @@ const ConfirmationPage: React.FC = () => {
                         fullWidth
                         disabled={masterDataLoading}
                       />
-                      {getConfidenceIcon(operation.confidence)}
-                    </Box>
-                    {operation.originalName && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                        <Typography variant="caption" color="primary">
-                          元: {operation.originalName}
-                        </Typography>
-                        <Chip
-                          label={`${Math.round((operation.confidence || 0) * 100)}%`}
+                      <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5 }}>
+                        <Button
+                          variant="contained"
+                          color="success"
                           size="small"
-                          color={operation.nameError ? 'error' : 
-                                 operation.confidence && operation.confidence >= 0.9 ? 'success' : 'warning'}
-                          sx={{ height: '24px', fontSize: '13px' }}
-                        />
+                          onClick={() => updateMachineNameConfirmationStatus(index, 'approved')}
+                          disabled={!operation.氏名 || !masterData.employees.includes(operation.氏名)}
+                          sx={{ fontSize: '11px' }}
+                        >
+                          確定
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => updateMachineNameConfirmationStatus(index, 'pending')}
+                          sx={{ fontSize: '11px' }}
+                        >
+                          戻る
+                        </Button>
                       </Box>
-                    )}
-                  </Box>
-                  {/* 生産数 */}
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                      生産数
-                    </Typography>
-                    <TextField
-                      value={operation.生産数}
-                      onChange={(e) => updateMachineRecord(index, '生産数', e.target.value)}
-                      fullWidth
-                      type="number"
-                      placeholder="生産数"
-                      sx={{
-                        '& .MuiInputBase-root': {
-                          height: '40px',
-                          fontSize: '16px',
-                        }
-                      }}
-                    />
-                  </Box>
+                    </Box>
+                  ) : (
+                    // 通常表示：氏名とステータスボタンを横並び
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <TextField
+                        value={operation.氏名}
+                        variant="outlined"
+                        disabled
+                        fullWidth
+                        sx={{
+                          '& .MuiInputBase-root': {
+                            fontSize: '14px',
+                            height: '36px',
+                          }
+                        }}
+                      />
+                      {operation.nameConfirmationStatus === 'pending' ? (
+                        <Button
+                          variant="contained"
+                          color="warning"
+                          size="small"
+                          startIcon={<HelpOutline />}
+                          onClick={() => openConfirmPopup('machine', operation.氏名, index)}
+                          sx={{ minWidth: '60px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                        >
+                          確認
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="contained"
+                          color="success"
+                          size="small"
+                          startIcon={<Check />}
+                          onClick={() => updateMachineNameConfirmationStatus(index, 'editing')}
+                          sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                        >
+                          OK
+                        </Button>
+                      )}
+                    </Box>
+                  )}
+                  {operation.originalName && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                      <Typography variant="caption" color="primary">
+                        元: {operation.originalName}
+                      </Typography>
+                      <Chip
+                        label={`${Math.round((operation.confidence || 0) * 100)}%`}
+                        size="small"
+                        color={operation.nameError ? 'error' : 
+                               operation.confidence && operation.confidence >= 0.9 ? 'success' : 'warning'}
+                        sx={{ height: '24px', fontSize: '13px' }}
+                      />
+                    </Box>
+                  )}
                 </Box>
                 
                 {/* 2行目：開始時刻、終了時刻、休憩 */}
@@ -1122,13 +1437,14 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 </Box>
                 
-                {/* 3行目：休憩と削除操作を横並び */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                {/* 3行目：休憩（縦並び）と生産数を横並び */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  {/* 休憩（縦並び） */}
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       休憩
                     </Typography>
-                    <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Stack direction="column" spacing={1} alignItems="flex-start">
                       <Chip
                         label="昼休み"
                         size="small"
@@ -1159,6 +1475,28 @@ const ConfirmationPage: React.FC = () => {
                       />
                     </Stack>
                   </Box>
+                  
+                  {/* 生産数 */}
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
+                      生産数
+                    </Typography>
+                    <TextField
+                      value={operation.生産数}
+                      onChange={(e) => updateMachineRecord(index, '生産数', e.target.value)}
+                      fullWidth
+                      type="number"
+                      placeholder="生産数"
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          height: '40px',
+                          fontSize: '16px',
+                        }
+                      }}
+                    />
+                  </Box>
+                  
+                  {/* 削除ボタン */}
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                     <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
                       削除
@@ -1185,16 +1523,16 @@ const ConfirmationPage: React.FC = () => {
       </Card>
 
       {/* アクションボタン */}
-      <Box sx={{ display: 'flex', gap: 2, mt: 3, maxWidth: '393px', mx: 'auto' }}>
+      <Box sx={{ display: 'flex', gap: 2, mt: 3, mx: 'auto' }}>
         <Button
           variant="outlined"
           onClick={handleBack}
           startIcon={<ArrowBack />}
           sx={{ 
-            width: '160px',
+            flex: 1,
             height: '48px',
             fontSize: '14px',
-            minWidth: '160px'
+            maxWidth: '160px'
           }}
         >
           やり直す
@@ -1204,10 +1542,10 @@ const ConfirmationPage: React.FC = () => {
           onClick={handleSave}
           startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <Save />}
           sx={{ 
-            width: '200px',
+            flex: 1,
             height: '48px',
             fontSize: '14px',
-            minWidth: '200px'
+            maxWidth: '200px'
           }}
           disabled={isSaving}
         >
@@ -1278,12 +1616,69 @@ const ConfirmationPage: React.FC = () => {
             variant="contained"
             autoFocus
           >
-            確認
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
-  );
+                      確認
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* 確認ポップアップダイアログ */}
+    <Dialog
+      open={confirmPopupOpen}
+      onClose={closeConfirmPopup}
+      aria-labelledby="confirm-popup-title"
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle id="confirm-popup-title" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <HelpOutline color="warning" />
+        確認してください
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ fontSize: '16px', mb: 2 }}>
+          以下の{confirmTarget?.type === 'product' ? '商品名' : '氏名'}で正しいですか？
+        </DialogContentText>
+        <Box sx={{ 
+          p: 2, 
+          bgcolor: 'grey.100', 
+          borderRadius: 1, 
+          textAlign: 'center',
+          border: '2px solid',
+          borderColor: 'warning.main'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {confirmTarget?.value}
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ p: 2, gap: 1 }}>
+        <Button 
+          onClick={closeConfirmPopup} 
+          color="secondary"
+          startIcon={<Close />}
+        >
+          キャンセル
+        </Button>
+        <Button
+          onClick={handleConfirmEdit}
+          color="primary"
+          variant="outlined"
+          startIcon={<Edit />}
+        >
+          修正する
+        </Button>
+        <Button 
+          onClick={handleConfirmOK} 
+          color="success"
+          variant="contained"
+          startIcon={<Check />}
+          autoFocus
+        >
+          これで正しい
+        </Button>
+      </DialogActions>
+    </Dialog>
+  </Box>
+);
 };
 
 export default ConfirmationPage;
