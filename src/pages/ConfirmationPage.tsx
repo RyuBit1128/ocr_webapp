@@ -114,6 +114,49 @@ const ConfirmationPage: React.FC = () => {
     setEditedData(initializedData);
   }, [ocrResult, navigate, setCurrentStep]);
 
+  // マスターデータが読み込まれた時にエラーフラグをクリア
+  useEffect(() => {
+    if (!editedData || !masterData || masterDataLoading) return;
+
+    let hasChanges = false;
+    const updatedData = { ...editedData };
+
+    // ヘッダーの商品名エラーフラグをクリア
+    if (editedData.ヘッダー.商品名 && masterData.products.includes(editedData.ヘッダー.商品名)) {
+      if ((updatedData.ヘッダー as any).productError) {
+        delete (updatedData.ヘッダー as any).productError;
+        hasChanges = true;
+        console.log(`🟢 商品名エラーフラグをクリア: ${editedData.ヘッダー.商品名}`);
+      }
+    }
+
+    // 包装作業記録の氏名エラーフラグをクリア
+    updatedData.包装作業記録 = editedData.包装作業記録.map((record, index) => {
+      if (record.氏名 && masterData.employees.includes(record.氏名) && (record as any).nameError) {
+        console.log(`🟢 包装作業記録[${index}] 氏名エラーフラグをクリア: ${record.氏名}`);
+        const { nameError, ...cleanRecord } = record as any;
+        hasChanges = true;
+        return cleanRecord;
+      }
+      return record;
+    });
+
+    // 機械操作記録の氏名エラーフラグをクリア
+    updatedData.機械操作記録 = editedData.機械操作記録.map((record, index) => {
+      if (record.氏名 && masterData.employees.includes(record.氏名) && (record as any).nameError) {
+        console.log(`🟢 機械操作記録[${index}] 氏名エラーフラグをクリア: ${record.氏名}`);
+        const { nameError, ...cleanRecord } = record as any;
+        hasChanges = true;
+        return cleanRecord;
+      }
+      return record;
+    });
+
+    if (hasChanges) {
+      setEditedData(updatedData);
+    }
+  }, [editedData, masterData, masterDataLoading]);
+
   if (!editedData || !ocrResult) {
     return null;
   }
