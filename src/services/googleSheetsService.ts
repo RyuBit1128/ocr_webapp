@@ -29,42 +29,149 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Google OAuth認証を開始
+   * Google OAuth認証を開始（リダイレクト方式）
    */
   static async authenticate(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (typeof window === 'undefined' || !window.google) {
-        reject(new Error('Google API ライブラリが読み込まれていません'));
-        return;
+    try {
+      const config = this.getConfig();
+      const redirectUri = window.location.origin + window.location.pathname;
+      
+      // OAuth認証URL を構築
+      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      authUrl.searchParams.set('client_id', config.googleClientId);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
+      authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/spreadsheets');
+      authUrl.searchParams.set('response_type', 'token');
+      authUrl.searchParams.set('include_granted_scopes', 'true');
+      authUrl.searchParams.set('state', 'auth_redirect');
+
+      console.log('🔄 リダイレクト認証を開始:', authUrl.toString());
+      
+      // リダイレクトで認証開始（この時点でページが移動するため、この関数は戻らない）
+      window.location.href = authUrl.toString();
+      
+      // リダイレクトされるため、この行には到達しない
+      throw new Error('認証リダイレクトが開始されました');
+      
+    } catch (error) {
+      throw new Error(`認証エラー: ${error}`);
+    }
+  }
+
+  /**
+   * localStorage からアクセストークンを復元
+   */
+  private static loadTokenFromStorage(): void {
+    try {
+      const token = localStorage.getItem('google_access_token');
+      const expiresAt = localStorage.getItem('google_token_expires_at');
+      
+      if (token && expiresAt) {
+        const expirationTime = parseInt(expiresAt, 10);
+        if (Date.now() < expirationTime) {
+          this.accessToken = token;
+          console.log('✅ localStorage からトークンを復元しました');
+        } else {
+          console.log('⏰ 保存されたトークンが期限切れです');
+          this.clearStoredToken();
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ localStorage からのトークン復元に失敗:', error);
+    }
+  }
+
+  /**
+   * localStorage にアクセストークンを保存
+   */
+  private static saveTokenToStorage(token: string, expiresIn: number = 3600): void {
+    try {
+      const expiresAt = Date.now() + (expiresIn * 1000); // 秒を ms に変換
+      localStorage.setItem('google_access_token', token);
+      localStorage.setItem('google_token_expires_at', expiresAt.toString());
+      console.log('💾 アクセストークンを localStorage に保存しました');
+    } catch (error) {
+      console.warn('⚠️ localStorage へのトークン保存に失敗:', error);
+    }
+  }
+
+  /**
+   * localStorage からトークンを削除
+   */
+  private static clearStoredToken(): void {
+    try {
+      localStorage.removeItem('google_access_token');
+      localStorage.removeItem('google_token_expires_at');
+      this.accessToken = null;
+      console.log('🗑️ 保存されたトークンを削除しました');
+    } catch (error) {
+      console.warn('⚠️ トークン削除に失敗:', error);
+    }
+  }
+
+  /**
+   * URL ハッシュから認証結果を取得
+   */
+  static handleAuthRedirect(): boolean {
+    try {
+      const hash = window.location.hash;
+      if (!hash || !hash.includes('access_token=')) {
+        return false;
       }
 
-      window.google.accounts.oauth2.initTokenClient({
-        client_id: this.getConfig().googleClientId,
-        scope: 'https://www.googleapis.com/auth/spreadsheets',
-        callback: (response: any) => {
-          if (response.error) {
-            reject(new Error(`認証エラー: ${response.error}`));
-            return;
-          }
-          this.accessToken = response.access_token;
-          resolve(response.access_token);
-        },
-      }).requestAccessToken();
-    });
+      console.log('🔍 認証リダイレクトを検出:', hash);
+
+      // ハッシュパラメータを解析
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get('access_token');
+      const expiresIn = params.get('expires_in');
+      const state = params.get('state');
+
+      if (accessToken && state === 'auth_redirect') {
+        this.accessToken = accessToken;
+        const expiresInSeconds = expiresIn ? parseInt(expiresIn, 10) : 3600;
+        this.saveTokenToStorage(accessToken, expiresInSeconds);
+
+        // URL からハッシュを削除
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        
+        console.log('✅ 認証成功！トークンを取得しました');
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ 認証リダイレクト処理エラー:', error);
+      return false;
+    }
   }
 
   /**
    * アクセストークンの有効性をチェック
    */
   static async validateToken(): Promise<boolean> {
+    // まず localStorage から復元を試行
+    if (!this.accessToken) {
+      this.loadTokenFromStorage();
+    }
+
     if (!this.accessToken) return false;
 
     try {
       const response = await fetch(
         `https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${this.accessToken}`
       );
-      return response.ok;
-    } catch {
+      
+      if (!response.ok) {
+        console.log('🔄 トークンが無効のため localStorage から削除');
+        this.clearStoredToken();
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.warn('⚠️ トークン検証エラー:', error);
+      this.clearStoredToken();
       return false;
     }
   }
@@ -164,7 +271,10 @@ export class GoogleSheetsService {
   private static async ensureAuthenticated(): Promise<void> {
     const isValid = await this.validateToken();
     if (!isValid) {
+      // リダイレクト方式では、この時点でページがリダイレクトされるため戻ってこない
+      console.log('🔄 認証が必要です。認証ページにリダイレクトします...');
       await this.authenticate();
+      // この行には到達しない（リダイレクトされるため）
     }
   }
 
@@ -1173,21 +1283,4 @@ export class GoogleSheetsService {
   }
 }
 
-// Google API ライブラリの型定義
-declare global {
-  interface Window {
-    google: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (response: any) => void;
-          }) => {
-            requestAccessToken: () => void;
-          };
-        };
-      };
-    };
-  }
-}
+// 型定義（リダイレクト方式では Google API ライブラリは不要）
