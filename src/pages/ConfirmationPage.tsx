@@ -43,7 +43,7 @@ import { useMasterData } from '@/hooks/useMasterData';
 const ConfirmationPage: React.FC = () => {
   const navigate = useNavigate();
   const { ocrResult, setCurrentStep, setSuccess } = useAppStore();
-  const { masterData, loading: masterDataLoading } = useMasterData();
+  const { masterData, loading: masterDataLoading, error: masterDataError, refetch: refetchMasterData } = useMasterData();
   const [editedData, setEditedData] = useState<OcrResult | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -60,6 +60,9 @@ const ConfirmationPage: React.FC = () => {
     index?: number;
     value: string;
   } | null>(null);
+
+  // マスターデータエラーダイアログ用の状態
+  const [masterDataErrorDialogOpen, setMasterDataErrorDialogOpen] = useState(false);
 
   // 時間フォーマット関数
   const formatTimeInput = (input: string): string => {
@@ -134,6 +137,13 @@ const ConfirmationPage: React.FC = () => {
     
     setEditedData(initializedData);
   }, [ocrResult, navigate, setCurrentStep]);
+
+  // マスターデータエラーが発生した時にダイアログを表示
+  useEffect(() => {
+    if (masterDataError) {
+      setMasterDataErrorDialogOpen(true);
+    }
+  }, [masterDataError]);
 
   // マスターデータが読み込まれた時にエラーフラグをクリア
   useEffect(() => {
@@ -1674,6 +1684,70 @@ const ConfirmationPage: React.FC = () => {
           autoFocus
         >
           これで正しい
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* マスターデータエラーダイアログ */}
+    <Dialog
+      open={masterDataErrorDialogOpen}
+      onClose={() => setMasterDataErrorDialogOpen(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>
+        🚨 データ接続エラー
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          {masterDataError?.message || 'マスターデータの取得に失敗しました'}
+        </DialogContentText>
+        {masterDataError?.userAction && (
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+            <Typography variant="body2" color="info.dark">
+              <strong>対処方法:</strong><br />
+              {masterDataError.userAction}
+            </Typography>
+          </Box>
+        )}
+        {masterDataError?.details && (
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              <strong>エラー詳細:</strong><br />
+              {masterDataError.errorType} - Status: {masterDataError.status || 'N/A'}
+            </Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button 
+          onClick={() => setMasterDataErrorDialogOpen(false)}
+          color="secondary"
+        >
+          閉じる
+        </Button>
+        {masterDataError?.canRetry && (
+          <Button 
+            onClick={() => {
+              setMasterDataErrorDialogOpen(false);
+              refetchMasterData();
+            }}
+            color="primary"
+            variant="contained"
+            autoFocus
+          >
+            再試行
+          </Button>
+        )}
+        <Button 
+          onClick={() => {
+            setMasterDataErrorDialogOpen(false);
+            window.location.reload();
+          }}
+          color="warning"
+          variant="outlined"
+        >
+          ページを更新
         </Button>
       </DialogActions>
     </Dialog>

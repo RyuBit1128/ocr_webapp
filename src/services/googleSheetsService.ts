@@ -1,4 +1,4 @@
-import { OcrResult } from '@/types';
+import { OcrResult, MasterDataError, MasterDataErrorType } from '@/types';
 import { EnvironmentValidator } from '@/utils/envConfig';
 
 /**
@@ -7,6 +7,62 @@ import { EnvironmentValidator } from '@/utils/envConfig';
 export class GoogleSheetsService {
   private static config: any = null;
   private static accessToken: string | null = null;
+
+  /**
+   * MasterDataErrorを作成するヘルパー関数
+   */
+  private static createMasterDataError(
+    errorType: MasterDataErrorType,
+    message: string,
+    status?: number,
+    details?: any
+  ): MasterDataError {
+    const error = new Error(message) as MasterDataError;
+    error.errorType = errorType;
+    error.status = status;
+    error.details = details;
+
+    // エラータイプに応じて再試行可能性とユーザーアクションを設定
+    switch (errorType) {
+      case 'API_KEY_BLOCKED':
+        error.canRetry = false;
+        error.userAction = '管理者にお問い合わせください（APIキー設定の問題）';
+        break;
+      case 'UNAUTHORIZED':
+        error.canRetry = true;
+        error.userAction = 'ページを更新して再度お試しください';
+        break;
+      case 'PERMISSION_DENIED':
+        error.canRetry = false;
+        error.userAction = '管理者にお問い合わせください（スプレッドシート権限の問題）';
+        break;
+      case 'NOT_FOUND':
+        error.canRetry = false;
+        error.userAction = '管理者にお問い合わせください（スプレッドシート/シートが見つかりません）';
+        break;
+      case 'NETWORK_ERROR':
+        error.canRetry = true;
+        error.userAction = 'インターネット接続を確認してから再度お試しください';
+        break;
+      case 'INVALID_RESPONSE':
+        error.canRetry = true;
+        error.userAction = 'しばらく待ってから再度お試しください';
+        break;
+      case 'EMPTY_DATA':
+        error.canRetry = false;
+        error.userAction = '管理者にお問い合わせください（マスターデータが設定されていません）';
+        break;
+      case 'CONFIG_ERROR':
+        error.canRetry = false;
+        error.userAction = '管理者にお問い合わせください（設定エラー）';
+        break;
+      default:
+        error.canRetry = true;
+        error.userAction = 'ページを更新して再度お試しください';
+    }
+
+    return error;
+  }
   
   private static getConfig() {
     if (!this.config) {
@@ -355,19 +411,72 @@ export class GoogleSheetsService {
         spreadsheetId: this.getConfig().spreadsheetId,
         apiKey: this.getConfig().googleApiKey ? '設定済み' : '未設定'
       });
-      console.warn('⚠️ ダミーデータを返します（フォールバック）');
-      
-      // フォールバック用のダミーデータ
-      return {
-        employees: [
-          '田中太郎', '佐藤花子', '鈴木一郎', '高橋美咲', '渡辺健',
-          '土橋舞子', '野沢真紀', '今村健太郎', '山田次郎', '小林恵美',
-        ],
-        products: [
-          'クリアファイル', 'プラスチック容器', 'ビニール袋',
-          'パッケージボックス', 'シュリンクフィルム',
-        ],
-      };
+
+      // エラーの種類を判定して適切なMasterDataErrorを投げる
+      if (error instanceof Error && error.message.includes('マスターデータの取得に失敗しました')) {
+        // API呼び出しエラーの場合、元のエラーメッセージから詳細を判定
+        const originalMessage = error.message;
+        if (originalMessage.includes('403')) {
+          if (error.message.includes('blocked')) {
+            throw this.createMasterDataError(
+              'API_KEY_BLOCKED',
+              'APIキー制限により接続がブロックされています',
+              403,
+              error
+            );
+          } else {
+            throw this.createMasterDataError(
+              'PERMISSION_DENIED',
+              'スプレッドシートへのアクセス権限がありません',
+              403,
+              error
+            );
+          }
+        } else if (originalMessage.includes('401')) {
+          throw this.createMasterDataError(
+            'UNAUTHORIZED',
+            '認証が無効です。再度ログインが必要です',
+            401,
+            error
+          );
+        } else if (originalMessage.includes('404')) {
+          throw this.createMasterDataError(
+            'NOT_FOUND',
+            'スプレッドシートまたはシートが見つかりません',
+            404,
+            error
+          );
+        } else {
+          throw this.createMasterDataError(
+            'INVALID_RESPONSE',
+            'APIからの応答が不正です',
+            undefined,
+            error
+          );
+        }
+      } else if (error instanceof Error && error.message.includes('マスターデータが空です')) {
+        throw this.createMasterDataError(
+          'EMPTY_DATA',
+          'マスターデータが設定されていません',
+          undefined,
+          error
+        );
+      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw this.createMasterDataError(
+          'NETWORK_ERROR',
+          'ネットワークエラーが発生しました',
+          undefined,
+          error
+        );
+      } else {
+        // その他のエラー
+        throw this.createMasterDataError(
+          'CONFIG_ERROR',
+          '設定エラーまたは予期しないエラーが発生しました',
+          undefined,
+          error
+        );
+      }
     }
   }
 

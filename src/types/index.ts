@@ -135,10 +135,29 @@ export interface BatchUpdateRequest {
 }
 
 // エラーハンドリング用の型定義
-export type ErrorType = 'OCR_ERROR' | 'SHEETS_ERROR' | 'NETWORK_ERROR' | 'VALIDATION_ERROR';
+export type ErrorType = 'OCR_ERROR' | 'SHEETS_ERROR' | 'NETWORK_ERROR' | 'VALIDATION_ERROR' | 'MASTER_DATA_ERROR';
 
 export interface AppError {
   type: ErrorType;
   message: string;
+  details?: any;
+}
+
+// マスターデータエラーの詳細タイプ
+export type MasterDataErrorType = 
+  | 'API_KEY_BLOCKED'        // APIキー制限エラー
+  | 'UNAUTHORIZED'           // 認証エラー  
+  | 'PERMISSION_DENIED'      // 権限エラー
+  | 'NOT_FOUND'             // スプレッドシート/シート未存在
+  | 'NETWORK_ERROR'         // ネットワークエラー
+  | 'INVALID_RESPONSE'      // レスポンス解析エラー
+  | 'EMPTY_DATA'            // データが空
+  | 'CONFIG_ERROR';         // 設定エラー
+
+export interface MasterDataError extends Error {
+  errorType: MasterDataErrorType;
+  status?: number;
+  canRetry: boolean;        // 再試行で解決可能か
+  userAction: string;       // ユーザーへの推奨アクション
   details?: any;
 }
