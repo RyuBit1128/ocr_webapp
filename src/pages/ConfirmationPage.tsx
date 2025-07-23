@@ -38,7 +38,6 @@ import { useAppStore } from '@/stores/appStore';
 import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus } from '@/types';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { useMasterData } from '@/hooks/useMasterData';
-import { MasterDataError } from '@/types';
 
 const ConfirmationPage: React.FC = () => {
   const navigate = useNavigate();
