@@ -1,5 +1,6 @@
 import { OcrResult, MasterDataError, MasterDataErrorType } from '@/types';
 import { EnvironmentValidator } from '@/utils/envConfig';
+import { TokenExpiryService } from './tokenExpiryService';
 
 /**
  * Google Sheets API を使用したデータ管理サービス
@@ -192,6 +193,10 @@ export class GoogleSheetsService {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
         
         console.log('✅ 認証成功！トークンを取得しました');
+        
+        // 認証成功後にトークン監視を開始/リセット
+        TokenExpiryService.resetMonitoring();
+        
         return true;
       }
 

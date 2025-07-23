@@ -5,11 +5,13 @@ import { CssBaseline } from '@mui/material';
 import { theme } from '@/theme/theme';
 import Layout from '@/components/Layout';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import AuthRenewalDialog from '@/components/AuthRenewalDialog';
 import CameraPage from '@/pages/CameraPage';
 import ProcessingPage from '@/pages/ProcessingPage';
 import ConfirmationPage from '@/pages/ConfirmationPage';
 import SuccessPage from '@/pages/SuccessPage';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
+import { TokenExpiryService } from '@/services/tokenExpiryService';
 
 function App() {
   // アプリ起動時に認証リダイレクトをチェック
@@ -18,12 +20,42 @@ function App() {
       const wasRedirected = GoogleSheetsService.handleAuthRedirect();
       if (wasRedirected) {
         console.log('🎉 Google認証が完了しました！');
-        // 必要に応じて特定のページにリダイレクト
-        // window.location.href = '/camera';
+        // 認証完了後にトークン監視を開始
+        TokenExpiryService.resetMonitoring();
+      } else {
+        // 既存のトークンがある場合は監視を開始
+        const token = localStorage.getItem('google_access_token');
+        const expiresAt = localStorage.getItem('google_token_expires_at');
+        
+        if (token && expiresAt) {
+          const expiryTime = parseInt(expiresAt, 10);
+          if (Date.now() < expiryTime) {
+            console.log('🔄 既存のトークンで監視を開始します');
+            TokenExpiryService.startMonitoring();
+          }
+        }
       }
     } catch (error) {
       console.error('❌ 認証リダイレクト処理エラー:', error);
     }
+
+    // 開発環境でのテスト用グローバル関数
+    if (import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === 'true') {
+      (window as any).authTest = {
+        showDialog: () => TokenExpiryService.showTestDialog(),
+        startTest: () => TokenExpiryService.startTestMonitoring(),
+        stopMonitoring: () => TokenExpiryService.stopMonitoring(),
+        getStatus: () => TokenExpiryService.getMonitoringStatus(),
+      };
+      console.log('🧪 開発モード: ブラウザコンソールで authTest.showDialog() でテスト可能');
+    }
+  }, []);
+
+  // アプリ終了時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      TokenExpiryService.stopMonitoring();
+    };
   }, []);
 
   return (
@@ -40,6 +72,8 @@ function App() {
               <Route path="/success" element={<SuccessPage />} />
             </Routes>
           </Layout>
+          {/* 認証更新ダイアログ */}
+          <AuthRenewalDialog />
         </Router>
       </ThemeProvider>
     </ErrorBoundary>
