@@ -286,21 +286,31 @@ export class GoogleSheetsService {
     employees: string[];
     products: string[];
   }> {
+    console.log('🔄 マスターデータ取得開始');
     await this.ensureAuthenticated();
+    console.log('✅ 認証確認完了');
 
     try {
       // 管理シートからA列とB列を取得（ヘッダー行を除外するため2行目から）
-      const masterDataResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/管理!A2:B?key=${this.getConfig().googleApiKey}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-          },
-        }
-      );
+      const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/管理!A2:B?key=${this.getConfig().googleApiKey}`;
+      console.log('📡 API呼び出し:', apiUrl);
+      
+      const masterDataResponse = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      console.log('📊 API レスポンス:', {
+        status: masterDataResponse.status,
+        statusText: masterDataResponse.statusText,
+        ok: masterDataResponse.ok
+      });
 
       if (!masterDataResponse.ok) {
-        throw new Error('マスターデータの取得に失敗しました');
+        const errorText = await masterDataResponse.text();
+        console.error('❌ API エラーレスポンス:', errorText);
+        throw new Error(`マスターデータの取得に失敗しました: ${masterDataResponse.status} ${masterDataResponse.statusText}`);
       }
 
       const masterData = await masterDataResponse.json();
@@ -337,6 +347,15 @@ export class GoogleSheetsService {
 
     } catch (error) {
       console.error('マスターデータ取得エラー:', error);
+      console.error('🔍 詳細エラー情報:', {
+        errorType: typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        accessToken: this.accessToken ? '設定済み' : '未設定',
+        spreadsheetId: this.getConfig().spreadsheetId,
+        apiKey: this.getConfig().googleApiKey ? '設定済み' : '未設定'
+      });
+      console.warn('⚠️ ダミーデータを返します（フォールバック）');
       
       // フォールバック用のダミーデータ
       return {
