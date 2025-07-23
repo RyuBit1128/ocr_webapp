@@ -115,22 +115,29 @@ export class DataCorrectionService {
       // スプレッドシートに記載されている人しかいない前提で必ず最も近い人を選択
       if (record.氏名) {
         const nameMatch = FuzzyMatchService.findBestMatch(record.氏名, employees);
+        console.log(`🔍 マッチング結果 - 入力: ${record.氏名}, マッチ: ${nameMatch.match}, 信頼度: ${nameMatch.confidence}`);
         
         if (nameMatch.match) {
+          // 元の名前を記録（補正結果の表示用）
           correctedRecord.originalName = record.氏名;
           correctedRecord.氏名 = nameMatch.match;
           correctedRecord.confidence = nameMatch.confidence;
           correctedRecord.matchType = nameMatch.type;
           correctedRecord.isLastNameMatch = nameMatch.isLastNameMatch;
           
-          // 常に元の名前を記録（補正結果の表示用）
-          correctedRecord.originalName = record.氏名;
-          
           // 信頼度が低い場合はエラーフラグを設定
           if (nameMatch.confidence < 0.4) {
             correctedRecord.nameError = true;
-            console.log(`🔴 エラーフラグ設定: ${record.氏名} (${Math.round(nameMatch.confidence * 100)}%)`);
+            console.log(`🔴 エラーフラグ設定: ${record.氏名} → ${nameMatch.match} (${Math.round(nameMatch.confidence * 100)}%)`);
           }
+        } else {
+          // マッチが見つからない場合（信頼度0%）
+          correctedRecord.originalName = record.氏名;
+          correctedRecord.氏名 = record.氏名; // 元の名前をそのまま使用
+          correctedRecord.confidence = 0;
+          correctedRecord.matchType = 'no_match';
+          correctedRecord.nameError = true;
+          console.log(`🔴 マッチなし: ${record.氏名} - エラーフラグ設定`);
         }
       }
       
@@ -152,22 +159,29 @@ export class DataCorrectionService {
       // スプレッドシートに記載されている人しかいない前提で必ず最も近い人を選択
       if (record.氏名) {
         const nameMatch = FuzzyMatchService.findBestMatch(record.氏名, employees);
+        console.log(`🔍 マッチング結果 - 入力: ${record.氏名}, マッチ: ${nameMatch.match}, 信頼度: ${nameMatch.confidence}`);
         
         if (nameMatch.match) {
+          // 元の名前を記録（補正結果の表示用）
           correctedRecord.originalName = record.氏名;
           correctedRecord.氏名 = nameMatch.match;
           correctedRecord.confidence = nameMatch.confidence;
           correctedRecord.matchType = nameMatch.type;
           correctedRecord.isLastNameMatch = nameMatch.isLastNameMatch;
           
-          // 常に元の名前を記録（補正結果の表示用）
-          correctedRecord.originalName = record.氏名;
-          
           // 信頼度が低い場合はエラーフラグを設定
           if (nameMatch.confidence < 0.4) {
             correctedRecord.nameError = true;
-            console.log(`🔴 エラーフラグ設定: ${record.氏名} (${Math.round(nameMatch.confidence * 100)}%)`);
+            console.log(`🔴 エラーフラグ設定: ${record.氏名} → ${nameMatch.match} (${Math.round(nameMatch.confidence * 100)}%)`);
           }
+        } else {
+          // マッチが見つからない場合（信頼度0%）
+          correctedRecord.originalName = record.氏名;
+          correctedRecord.氏名 = record.氏名; // 元の名前をそのまま使用
+          correctedRecord.confidence = 0;
+          correctedRecord.matchType = 'no_match';
+          correctedRecord.nameError = true;
+          console.log(`🔴 マッチなし: ${record.氏名} - エラーフラグ設定`);
         }
       }
       

@@ -32,7 +32,6 @@ import {
   Warning,
   Check,
   HelpOutline,
-  Close,
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { useAppStore } from '@/stores/appStore';
@@ -63,6 +62,9 @@ const ConfirmationPage: React.FC = () => {
 
   // マスターデータエラーダイアログ用の状態
   const [masterDataErrorDialogOpen, setMasterDataErrorDialogOpen] = useState(false);
+  
+  // 自動的に開くドロップダウンの管理
+  const [autoOpenDropdowns, setAutoOpenDropdowns] = useState<Set<string>>(new Set());
 
   // 時間フォーマット関数
   const formatTimeInput = (input: string): string => {
@@ -90,6 +92,7 @@ const ConfirmationPage: React.FC = () => {
     
     // 確認状態の初期化（エラーがある場合はpending、ない場合はapproved）
     if (record.nameError) {
+      console.log(`🔴 nameErrorを検出: ${record.氏名} - ${record.nameError}`);
       baseRecord.nameConfirmationStatus = 'pending';
     } else {
       baseRecord.nameConfirmationStatus = 'approved';
@@ -156,6 +159,7 @@ const ConfirmationPage: React.FC = () => {
     if (editedData.ヘッダー.商品名 && masterData.products.includes(editedData.ヘッダー.商品名)) {
       if ((updatedData.ヘッダー as any).productError) {
         delete (updatedData.ヘッダー as any).productError;
+        (updatedData.ヘッダー as any).productConfirmationStatus = 'approved';
         hasChanges = true;
         console.log(`🟢 商品名エラーフラグをクリア: ${editedData.ヘッダー.商品名}`);
       }
@@ -167,7 +171,10 @@ const ConfirmationPage: React.FC = () => {
         console.log(`🟢 包装作業記録[${index}] 氏名エラーフラグをクリア: ${record.氏名}`);
         const { nameError, ...cleanRecord } = record as any;
         hasChanges = true;
-        return cleanRecord;
+        return {
+          ...cleanRecord,
+          nameConfirmationStatus: 'approved' // マスターデータと一致したのでapprovedに変更
+        };
       }
       return record;
     });
@@ -178,7 +185,10 @@ const ConfirmationPage: React.FC = () => {
         console.log(`🟢 機械操作記録[${index}] 氏名エラーフラグをクリア: ${record.氏名}`);
         const { nameError, ...cleanRecord } = record as any;
         hasChanges = true;
-        return cleanRecord;
+        return {
+          ...cleanRecord,
+          nameConfirmationStatus: 'approved' // マスターデータと一致したのでapprovedに変更
+        };
       }
       return record;
     });
@@ -244,10 +254,16 @@ const ConfirmationPage: React.FC = () => {
     
     if (confirmTarget.type === 'product') {
       updateProductConfirmationStatus('editing');
+      // ドロップダウンを自動的に開く
+      setAutoOpenDropdowns(new Set(['product']));
     } else if (confirmTarget.type === 'packaging' && confirmTarget.index !== undefined) {
       updatePackagingNameConfirmationStatus(confirmTarget.index, 'editing');
+      // ドロップダウンを自動的に開く
+      setAutoOpenDropdowns(new Set([`packaging-${confirmTarget.index}`]));
     } else if (confirmTarget.type === 'machine' && confirmTarget.index !== undefined) {
       updateMachineNameConfirmationStatus(confirmTarget.index, 'editing');
+      // ドロップダウンを自動的に開く
+      setAutoOpenDropdowns(new Set([`machine-${confirmTarget.index}`]));
     }
     
     closeConfirmPopup();
@@ -713,64 +729,67 @@ const ConfirmationPage: React.FC = () => {
             基本情報
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* 作業日と作業時間を横並び */}
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ja">
-                <DatePicker
-                  label="作業日"
-                  value={editedData.ヘッダー.作業日 ? dayjs(editedData.ヘッダー.作業日) : null}
-                  onChange={(newValue: Dayjs | null) => {
-                    if (newValue) {
-                      updateHeader('作業日', newValue.format('YYYY/MM/DD'));
-                    }
-                  }}
-                  format="YYYY/MM/DD"
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      variant: "outlined",
-                      sx: {
-                        '& .MuiInputBase-root': {
-                          height: '48px',
-                          fontSize: '16px',
-                        }
+            {/* 作業日 */}
+            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ja">
+              <DatePicker
+                label="作業日"
+                value={editedData.ヘッダー.作業日 ? dayjs(editedData.ヘッダー.作業日) : null}
+                onChange={(newValue: Dayjs | null) => {
+                  if (newValue) {
+                    updateHeader('作業日', newValue.format('YYYY/MM/DD'));
+                  }
+                }}
+                format="YYYY/MM/DD"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    variant: "outlined",
+                    sx: {
+                      '& .MuiInputBase-root': {
+                        height: '56px',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                      },
+                      '& .MuiInputBase-input': {
+                        cursor: 'pointer',
+                      }
+                    },
+                    onClick: (e: any) => {
+                      // テキストフィールドのどこをクリックしてもカレンダーを開く
+                      const input = e.currentTarget.querySelector('input');
+                      if (input) {
+                        input.focus();
+                        input.click();
                       }
                     }
-                  }}
-                />
-              </LocalizationProvider>
-              <TextField
-                label="作業時間"
-                value={editedData.ヘッダー.作業時間}
-                onChange={(e) => updateHeader('作業時間', e.target.value)}
-                fullWidth
-                variant="outlined"
-                sx={{
-                  '& .MuiInputBase-root': {
-                    height: '40px',
-                    fontSize: '14px',
+                  },
+                  field: {
+                    clearable: false,
+                    onMouseDown: (e: any) => {
+                      e.preventDefault();
+                    }
                   }
                 }}
               />
-            </Box>
-            <TextField
-              label="工場名"
-              value={editedData.ヘッダー.工場名}
-              onChange={(e) => updateHeader('工場名', e.target.value)}
-              fullWidth
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-root': {
-                  height: '56px',
-                  fontSize: '18px',
-                }
-              }}
-            />
+            </LocalizationProvider>
             <Box>
               {editedData.ヘッダー.productConfirmationStatus === 'editing' ? (
                 // 編集状態：ドロップダウンを表示
                 <Box>
                   <Autocomplete
+                    open={autoOpenDropdowns.has('product')}
+                    onOpen={() => {
+                      if (!autoOpenDropdowns.has('product')) {
+                        setAutoOpenDropdowns(new Set([...autoOpenDropdowns, 'product']));
+                      }
+                    }}
+                    onClose={() => {
+                      setAutoOpenDropdowns(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete('product');
+                        return newSet;
+                      });
+                    }}
                     options={masterData.products}
                     value={editedData.ヘッダー.商品名}
                     onChange={(_, newValue) => {
@@ -802,7 +821,7 @@ const ConfirmationPage: React.FC = () => {
                         helperText="正しい商品名を選択してください"
                         sx={{
                           '& .MuiInputBase-root': {
-                            fontSize: '16px',
+                            fontSize: '24px',
                           }
                         }}
                       />
@@ -841,7 +860,15 @@ const ConfirmationPage: React.FC = () => {
                     disabled
                     sx={{
                       '& .MuiInputBase-root': {
-                        fontSize: '16px',
+                        fontSize: '24px',
+                      },
+                      '& .MuiOutlinedInput-root': {
+                        '&.Mui-disabled': {
+                          '& fieldset': {
+                            borderColor: editedData.ヘッダー.productConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
+                            borderWidth: editedData.ヘッダー.productConfirmationStatus === 'pending' ? '2px' : '1px',
+                          }
+                        }
                       }
                     }}
                   />
@@ -862,7 +889,10 @@ const ConfirmationPage: React.FC = () => {
                       color="success"
                       size="small"
                       startIcon={<Check />}
-                      onClick={() => updateProductConfirmationStatus('editing')}
+                      onClick={() => {
+                        updateProductConfirmationStatus('editing');
+                        setAutoOpenDropdowns(new Set(['product']));
+                      }}
                       sx={{ minWidth: '60px', whiteSpace: 'nowrap' }}
                     >
                       OK
@@ -915,7 +945,7 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               startIcon={<PersonAdd />}
               onClick={addPackagingRecord}
-              sx={{ minHeight: '28px', fontSize: '14px' }}
+              sx={{ minHeight: '28px', fontSize: '24px' }}
             >
               作業者追加
             </Button>
@@ -944,6 +974,19 @@ const ConfirmationPage: React.FC = () => {
                     // 編集状態：ドロップダウンを表示
                     <Box>
                       <Autocomplete
+                        open={autoOpenDropdowns.has(`packaging-${index}`)}
+                        onOpen={() => {
+                          if (!autoOpenDropdowns.has(`packaging-${index}`)) {
+                            setAutoOpenDropdowns(new Set([...autoOpenDropdowns, `packaging-${index}`]));
+                          }
+                        }}
+                        onClose={() => {
+                          setAutoOpenDropdowns(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(`packaging-${index}`);
+                            return newSet;
+                          });
+                        }}
                         options={masterData.employees}
                         value={worker.氏名}
                         onChange={(_, newValue) => {
@@ -976,7 +1019,7 @@ const ConfirmationPage: React.FC = () => {
                             helperText="正しい氏名を選択してください"
                             sx={{
                               '& .MuiInputBase-root': {
-                                fontSize: '14px',
+                                fontSize: '24px',
                                 height: '36px',
                               }
                             }}
@@ -1017,8 +1060,16 @@ const ConfirmationPage: React.FC = () => {
                         fullWidth
                         sx={{
                           '& .MuiInputBase-root': {
-                            fontSize: '14px',
+                            fontSize: '24px',
                             height: '36px',
+                          },
+                          '& .MuiOutlinedInput-root': {
+                            '&.Mui-disabled': {
+                              '& fieldset': {
+                                borderColor: worker.nameConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
+                                borderWidth: worker.nameConfirmationStatus === 'pending' ? '2px' : '1px',
+                              }
+                            }
                           }
                         }}
                       />
@@ -1039,7 +1090,10 @@ const ConfirmationPage: React.FC = () => {
                           color="success"
                           size="small"
                           startIcon={<Check />}
-                          onClick={() => updatePackagingNameConfirmationStatus(index, 'editing')}
+                          onClick={() => {
+                            updatePackagingNameConfirmationStatus(index, 'editing');
+                            setAutoOpenDropdowns(new Set([`packaging-${index}`]));
+                          }}
                           sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
                           OK
@@ -1091,12 +1145,13 @@ const ConfirmationPage: React.FC = () => {
                               updatePackagingTimeSlot(index, timeSlotIndex, '開始時刻', formatted);
                             }
                           }}
+                          onFocus={(e) => e.target.select()}
                           fullWidth
                           placeholder="例: 800 → 8:00"
                           sx={{
                             '& .MuiInputBase-root': {
                               height: '24px',
-                              fontSize: '18px',
+                              fontSize: '24px',
                             }
                           }}
                         />
@@ -1109,12 +1164,13 @@ const ConfirmationPage: React.FC = () => {
                               updatePackagingTimeSlot(index, timeSlotIndex, '終了時刻', formatted);
                             }
                           }}
+                          onFocus={(e) => e.target.select()}
                           fullWidth
                           placeholder="例: 1730 → 17:30"
                           sx={{
                             '& .MuiInputBase-root': {
                               height: '24px',
-                              fontSize: '18px',
+                              fontSize: '24px',
                             }
                           }}
                         />
@@ -1125,7 +1181,7 @@ const ConfirmationPage: React.FC = () => {
                             color="error"
                             sx={{ width: '32px', height: '32px' }}
                           >
-                            <Delete sx={{ fontSize: '18px' }} />
+                            <Delete sx={{ fontSize: '24px' }} />
                           </IconButton>
                         )}
                       </Box>
@@ -1180,13 +1236,14 @@ const ConfirmationPage: React.FC = () => {
                     <TextField
                       value={worker.生産数}
                       onChange={(e) => updatePackagingRecord(index, '生産数', e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       fullWidth
                       type="number"
                       placeholder="生産数"
                       sx={{
                         '& .MuiInputBase-root': {
                           height: '40px',
-                          fontSize: '16px',
+                          fontSize: '24px',
                         }
                       }}
                     />
@@ -1229,7 +1286,7 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               startIcon={<Add />}
               onClick={addMachineRecord}
-              sx={{ minHeight: '28px', fontSize: '14px' }}
+              sx={{ minHeight: '28px', fontSize: '24px' }}
             >
               作業者追加
             </Button>
@@ -1258,6 +1315,19 @@ const ConfirmationPage: React.FC = () => {
                     // 編集状態：ドロップダウンを表示
                     <Box>
                       <Autocomplete
+                        open={autoOpenDropdowns.has(`machine-${index}`)}
+                        onOpen={() => {
+                          if (!autoOpenDropdowns.has(`machine-${index}`)) {
+                            setAutoOpenDropdowns(new Set([...autoOpenDropdowns, `machine-${index}`]));
+                          }
+                        }}
+                        onClose={() => {
+                          setAutoOpenDropdowns(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(`machine-${index}`);
+                            return newSet;
+                          });
+                        }}
                         options={masterData.employees}
                         value={operation.氏名}
                         onChange={(_, newValue) => {
@@ -1290,7 +1360,7 @@ const ConfirmationPage: React.FC = () => {
                             helperText="正しい氏名を選択してください"
                             sx={{
                               '& .MuiInputBase-root': {
-                                fontSize: '14px',
+                                fontSize: '24px',
                                 height: '36px',
                               }
                             }}
@@ -1331,8 +1401,16 @@ const ConfirmationPage: React.FC = () => {
                         fullWidth
                         sx={{
                           '& .MuiInputBase-root': {
-                            fontSize: '14px',
+                            fontSize: '24px',
                             height: '36px',
+                          },
+                          '& .MuiOutlinedInput-root': {
+                            '&.Mui-disabled': {
+                              '& fieldset': {
+                                borderColor: operation.nameConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
+                                borderWidth: operation.nameConfirmationStatus === 'pending' ? '2px' : '1px',
+                              }
+                            }
                           }
                         }}
                       />
@@ -1353,7 +1431,10 @@ const ConfirmationPage: React.FC = () => {
                           color="success"
                           size="small"
                           startIcon={<Check />}
-                          onClick={() => updateMachineNameConfirmationStatus(index, 'editing')}
+                          onClick={() => {
+                            updateMachineNameConfirmationStatus(index, 'editing');
+                            setAutoOpenDropdowns(new Set([`machine-${index}`]));
+                          }}
                           sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
                           OK
@@ -1405,12 +1486,13 @@ const ConfirmationPage: React.FC = () => {
                               updateMachineTimeSlot(index, timeSlotIndex, '開始時刻', formatted);
                             }
                           }}
+                          onFocus={(e) => e.target.select()}
                           fullWidth
                           placeholder="例: 800 → 8:00"
                           sx={{
                             '& .MuiInputBase-root': {
                               height: '24px',
-                              fontSize: '18px',
+                              fontSize: '24px',
                             }
                           }}
                         />
@@ -1423,12 +1505,13 @@ const ConfirmationPage: React.FC = () => {
                               updateMachineTimeSlot(index, timeSlotIndex, '終了時刻', formatted);
                             }
                           }}
+                          onFocus={(e) => e.target.select()}
                           fullWidth
                           placeholder="例: 1730 → 17:30"
                           sx={{
                             '& .MuiInputBase-root': {
                               height: '24px',
-                              fontSize: '18px',
+                              fontSize: '24px',
                             }
                           }}
                         />
@@ -1439,7 +1522,7 @@ const ConfirmationPage: React.FC = () => {
                             color="error"
                             sx={{ width: '32px', height: '32px' }}
                           >
-                            <Delete sx={{ fontSize: '18px' }} />
+                            <Delete sx={{ fontSize: '24px' }} />
                           </IconButton>
                         )}
                       </Box>
@@ -1494,13 +1577,14 @@ const ConfirmationPage: React.FC = () => {
                     <TextField
                       value={operation.生産数}
                       onChange={(e) => updateMachineRecord(index, '生産数', e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       fullWidth
                       type="number"
                       placeholder="生産数"
                       sx={{
                         '& .MuiInputBase-root': {
                           height: '40px',
-                          fontSize: '16px',
+                          fontSize: '24px',
                         }
                       }}
                     />
@@ -1541,7 +1625,7 @@ const ConfirmationPage: React.FC = () => {
           sx={{ 
             flex: 1,
             height: '48px',
-            fontSize: '14px',
+            fontSize: '24px',
             maxWidth: '160px'
           }}
         >
@@ -1554,7 +1638,7 @@ const ConfirmationPage: React.FC = () => {
           sx={{ 
             flex: 1,
             height: '48px',
-            fontSize: '14px',
+            fontSize: '24px',
             maxWidth: '200px'
           }}
           disabled={isSaving}
@@ -1615,7 +1699,7 @@ const ConfirmationPage: React.FC = () => {
           個人シートが見つかりません
         </DialogTitle>
         <DialogContent>
-          <DialogContentText id="missing-sheet-dialog-description" sx={{ whiteSpace: 'pre-line', fontSize: '16px' }}>
+          <DialogContentText id="missing-sheet-dialog-description" sx={{ whiteSpace: 'pre-line', fontSize: '24px' }}>
             {missingSheetMessage}
           </DialogContentText>
         </DialogContent>
@@ -1644,7 +1728,7 @@ const ConfirmationPage: React.FC = () => {
         確認してください
       </DialogTitle>
       <DialogContent>
-        <DialogContentText sx={{ fontSize: '16px', mb: 2 }}>
+        <DialogContentText sx={{ fontSize: '24px', mb: 2 }}>
           以下の{confirmTarget?.type === 'product' ? '商品名' : '氏名'}で正しいですか？
         </DialogContentText>
         <Box sx={{ 
@@ -1660,19 +1744,18 @@ const ConfirmationPage: React.FC = () => {
           </Typography>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ p: 2, gap: 1 }}>
-        <Button 
-          onClick={closeConfirmPopup} 
-          color="secondary"
-          startIcon={<Close />}
-        >
-          キャンセル
-        </Button>
+      <DialogActions sx={{ p: 2, gap: 1, justifyContent: 'center' }}>
         <Button
           onClick={handleConfirmEdit}
           color="primary"
           variant="outlined"
           startIcon={<Edit />}
+          sx={{ 
+            minWidth: '120px',
+            height: '48px',
+            fontSize: '24px',
+            fontWeight: 600,
+          }}
         >
           修正する
         </Button>
@@ -1682,6 +1765,12 @@ const ConfirmationPage: React.FC = () => {
           variant="contained"
           startIcon={<Check />}
           autoFocus
+          sx={{ 
+            minWidth: '160px',
+            height: '48px',
+            fontSize: '24px',
+            fontWeight: 600,
+          }}
         >
           これで正しい
         </Button>
