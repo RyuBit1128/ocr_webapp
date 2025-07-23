@@ -90,7 +90,7 @@ export class GoogleSheetsService {
   static async authenticate(): Promise<string> {
     try {
       const config = this.getConfig();
-      const redirectUri = window.location.origin + window.location.pathname;
+      const redirectUri = window.location.origin + '/ocr_0714_V2/';
       
       // OAuth認証URL を構築
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
