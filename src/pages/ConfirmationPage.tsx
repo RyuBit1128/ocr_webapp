@@ -945,7 +945,7 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               startIcon={<PersonAdd />}
               onClick={addPackagingRecord}
-              sx={{ minHeight: '28px', fontSize: '24px' }}
+              sx={{ minHeight: '28px', fontSize: '14px' }}
             >
               作業者追加
             </Button>
@@ -1286,7 +1286,7 @@ const ConfirmationPage: React.FC = () => {
               variant="outlined"
               startIcon={<Add />}
               onClick={addMachineRecord}
-              sx={{ minHeight: '28px', fontSize: '24px' }}
+              sx={{ minHeight: '28px', fontSize: '14px' }}
             >
               作業者追加
             </Button>
@@ -1625,7 +1625,7 @@ const ConfirmationPage: React.FC = () => {
           sx={{ 
             flex: 1,
             height: '48px',
-            fontSize: '24px',
+            fontSize: '14px',
             maxWidth: '160px'
           }}
         >
@@ -1638,7 +1638,7 @@ const ConfirmationPage: React.FC = () => {
           sx={{ 
             flex: 1,
             height: '48px',
-            fontSize: '24px',
+            fontSize: '14px',
             maxWidth: '200px'
           }}
           disabled={isSaving}
@@ -1751,10 +1751,13 @@ const ConfirmationPage: React.FC = () => {
           variant="outlined"
           startIcon={<Edit />}
           sx={{ 
-            minWidth: '120px',
+            flex: 1,
             height: '48px',
-            fontSize: '24px',
+            fontSize: '14px',
             fontWeight: 600,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           修正する
@@ -1766,10 +1769,13 @@ const ConfirmationPage: React.FC = () => {
           startIcon={<Check />}
           autoFocus
           sx={{ 
-            minWidth: '160px',
+            flex: 1,
             height: '48px',
-            fontSize: '24px',
+            fontSize: '14px',
             fontWeight: 600,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           これで正しい
