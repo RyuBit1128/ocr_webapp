@@ -17,6 +17,7 @@ import { Search, Warning } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
 import { DataCorrectionService } from '@/services/dataCorrectionService';
 import { OpenAIOcrService } from '@/services/ocrService';
+import { GoogleSheetsService } from '@/services/googleSheetsService';
 
 const ProcessingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -64,7 +65,20 @@ const ProcessingPage: React.FC = () => {
           setStatusMessage(message);
         };
 
+        // 事前認証チェック（認証が必要な場合は自動的にリダイレクト）
+        setStatusMessage('認証を確認中...');
+        setProgress(5);
+        try {
+          await GoogleSheetsService.checkAuthentication();
+        } catch (authError) {
+          // 認証エラーの場合は自動的にリダイレクトされるため、ここには通常到達しない
+          console.log('🔄 認証チェックでリダイレクトが発生しました');
+          return;
+        }
+
         // OpenAI Vision APIでOCR処理
+        setStatusMessage('画像を分析中...');
+        setProgress(10);
         const ocrResult = await OpenAIOcrService.processImage(capturedImage, onProgress);
 
         // データ補正処理

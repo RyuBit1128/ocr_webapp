@@ -322,14 +322,22 @@ export class GoogleSheetsService {
   }
 
   /**
+   * 認証状態をチェック（認証が無効な場合は自動的にリダイレクト）
+   */
+  static async checkAuthentication(): Promise<void> {
+    await this.ensureAuthenticated();
+  }
+
+  /**
    * 必要に応じて認証を実行
    */
   private static async ensureAuthenticated(): Promise<void> {
     const isValid = await this.validateToken();
     if (!isValid) {
-      // トークンが無効な場合、すぐにリダイレクトではなくエラーを投げる
-      console.log('🔄 認証が必要です');
-      throw new Error('Google認証の有効期限が切れました。ページを更新して再度認証してください。');
+      // 認証が無効な場合、自動的にGoogleログイン画面にリダイレクト
+      console.log('🔄 認証が無効です。Googleログイン画面にリダイレクトします...');
+      await this.authenticate();
+      // この時点でページがリダイレクトされるため、以下の行には到達しない
     }
   }
 
@@ -409,14 +417,7 @@ export class GoogleSheetsService {
       });
 
       // エラーの種類を判定して適切なMasterDataErrorを投げる
-      if (error instanceof Error && error.message.includes('Google認証の有効期限が切れました')) {
-        throw this.createMasterDataError(
-          'UNAUTHORIZED',
-          'Google認証の有効期限が切れました',
-          401,
-          error
-        );
-      } else if (error instanceof Error && error.message.includes('マスターデータの取得に失敗しました')) {
+      if (error instanceof Error && error.message.includes('マスターデータの取得に失敗しました')) {
         // API呼び出しエラーの場合、元のエラーメッセージから詳細を判定
         const originalMessage = error.message;
         if (originalMessage.includes('403')) {
