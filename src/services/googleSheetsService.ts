@@ -327,10 +327,9 @@ export class GoogleSheetsService {
   private static async ensureAuthenticated(): Promise<void> {
     const isValid = await this.validateToken();
     if (!isValid) {
-      // リダイレクト方式では、この時点でページがリダイレクトされるため戻ってこない
-      console.log('🔄 認証が必要です。認証ページにリダイレクトします...');
-      await this.authenticate();
-      // この行には到達しない（リダイレクトされるため）
+      // トークンが無効な場合、すぐにリダイレクトではなくエラーを投げる
+      console.log('🔄 認証が必要です');
+      throw new Error('Google認証の有効期限が切れました。ページを更新して再度認証してください。');
     }
   }
 
@@ -402,18 +401,22 @@ export class GoogleSheetsService {
       return { employees, products };
 
     } catch (error) {
-      console.error('マスターデータ取得エラー:', error);
-      console.error('🔍 詳細エラー情報:', {
-        errorType: typeof error,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        accessToken: this.accessToken ? '設定済み' : '未設定',
-        spreadsheetId: this.getConfig().spreadsheetId,
-        apiKey: this.getConfig().googleApiKey ? '設定済み' : '未設定'
+      console.error('🚨 マスターデータ取得エラー:', error);
+      console.error('🚨 エラー詳細:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        type: typeof error,
+        stack: error instanceof Error ? error.stack : undefined
       });
 
       // エラーの種類を判定して適切なMasterDataErrorを投げる
-      if (error instanceof Error && error.message.includes('マスターデータの取得に失敗しました')) {
+      if (error instanceof Error && error.message.includes('Google認証の有効期限が切れました')) {
+        throw this.createMasterDataError(
+          'UNAUTHORIZED',
+          'Google認証の有効期限が切れました',
+          401,
+          error
+        );
+      } else if (error instanceof Error && error.message.includes('マスターデータの取得に失敗しました')) {
         // API呼び出しエラーの場合、元のエラーメッセージから詳細を判定
         const originalMessage = error.message;
         if (originalMessage.includes('403')) {
@@ -469,7 +472,6 @@ export class GoogleSheetsService {
           error
         );
       } else {
-        // その他のエラー
         throw this.createMasterDataError(
           'CONFIG_ERROR',
           '設定エラーまたは予期しないエラーが発生しました',

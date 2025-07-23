@@ -38,6 +38,7 @@ import { useAppStore } from '@/stores/appStore';
 import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus } from '@/types';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { useMasterData } from '@/hooks/useMasterData';
+import { MasterDataError } from '@/types';
 
 const ConfirmationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -1832,6 +1833,22 @@ const ConfirmationPage: React.FC = () => {
             autoFocus
           >
             再試行
+          </Button>
+        )}
+        {masterDataError?.errorType === 'UNAUTHORIZED' && (
+          <Button 
+            onClick={() => {
+              setMasterDataErrorDialogOpen(false);
+              // 認証を手動で開始
+              GoogleSheetsService.authenticate().catch(() => {
+                // リダイレクトされるため、エラーハンドリングは不要
+              });
+            }}
+            color="success"
+            variant="contained"
+            autoFocus
+          >
+            再認証する
           </Button>
         )}
         <Button 
