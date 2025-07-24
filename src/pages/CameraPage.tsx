@@ -10,7 +10,7 @@ import {
   CircularProgress,
   Stack,
 } from '@mui/material';
-import { CameraAlt, Upload, CloudUpload } from '@mui/icons-material';
+import { CameraAlt, Upload, CloudUpload, TableChart, OpenInNew } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
 
 const CameraPage: React.FC = () => {
@@ -20,8 +20,6 @@ const CameraPage: React.FC = () => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   
   const { setCapturedImage, setCurrentStep } = useAppStore();
-
-
 
   // ファイルアップロード
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,7 +65,16 @@ const CameraPage: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-
+  // スプレッドシートを開く
+  const openSpreadsheet = () => {
+    const spreadsheetId = import.meta.env.VITE_SPREADSHEET_ID;
+    if (spreadsheetId) {
+      const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+      window.open(spreadsheetUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      setCameraError('スプレッドシートIDが設定されていません');
+    }
+  };
 
   return (
     <Box sx={{ textAlign: 'center' }}>
@@ -104,8 +111,27 @@ const CameraPage: React.FC = () => {
         >
           {isCapturing ? '処理中...' : '📁 ファイルを選択 / 撮影する'}
         </Button>
-      </Stack>
 
+        <Button
+          variant="outlined"
+          size="large"
+          onClick={openSpreadsheet}
+          startIcon={<TableChart />}
+          endIcon={<OpenInNew />}
+          sx={{ 
+            minWidth: '200px',
+            borderColor: 'success.main',
+            color: 'success.main',
+            '&:hover': {
+              borderColor: 'success.dark',
+              backgroundColor: 'success.light',
+              color: 'success.dark',
+            },
+          }}
+        >
+          📊 スプレッドシートを開く
+        </Button>
+      </Stack>
 
       {/* 使用方法の説明 */}
       <Card sx={{ textAlign: 'left' }}>
@@ -123,10 +149,19 @@ const CameraPage: React.FC = () => {
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
             <Upload sx={{ mr: 1 }} /> ファイルアップロード
           </Typography>
-          <Typography variant="body1" component="ul" sx={{ pl: 2, mb: 0 }}>
+          <Typography variant="body1" component="ul" sx={{ pl: 2, mb: 2 }}>
             <li>📁 JPG、PNG、GIFファイルに対応</li>
             <li>📏 ファイルサイズは10MB以下</li>
             <li>🖼️ 既に撮影済みの画像を使用できます</li>
+          </Typography>
+
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+            <TableChart sx={{ mr: 1 }} /> スプレッドシート
+          </Typography>
+          <Typography variant="body1" component="ul" sx={{ pl: 2, mb: 0 }}>
+            <li>📊 保存されたデータを確認できます</li>
+            <li>✏️ 手動でデータを編集・追加できます</li>
+            <li>📈 集計やグラフ作成も可能です</li>
           </Typography>
         </CardContent>
       </Card>
