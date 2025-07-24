@@ -63,8 +63,47 @@ const ConfirmationPage: React.FC = () => {
   // マスターデータエラーダイアログ用の状態
   const [masterDataErrorDialogOpen, setMasterDataErrorDialogOpen] = useState(false);
   
+  // 重複チェック用の状態
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    packaging: string[];
+    machine: string[];
+  } | null>(null);
+  const [duplicateHighlight, setDuplicateHighlight] = useState<Set<string>>(new Set());
+  
   // 自動的に開くドロップダウンの管理
   const [autoOpenDropdowns, setAutoOpenDropdowns] = useState<Set<string>>(new Set());
+
+  // 重複検出関数
+  const findDuplicates = (names: string[]): string[] => {
+    const nameCount = new Map<string, number>();
+    
+    names.forEach(name => {
+      if (name && name.trim()) { // 空文字は除外
+        const count = nameCount.get(name) || 0;
+        nameCount.set(name, count + 1);
+      }
+    });
+    
+    return Array.from(nameCount.entries())
+      .filter(([_, count]) => count > 1)
+      .map(([name, _]) => name);
+  };
+
+  // 重複チェック関数
+  const checkForDuplicates = (data: OcrResult) => {
+    const packagingNames = data.包装作業記録.map(record => record.氏名);
+    const machineNames = data.機械操作記録.map(record => record.氏名);
+    
+    const duplicatePackaging = findDuplicates(packagingNames);
+    const duplicateMachine = findDuplicates(machineNames);
+    
+    return {
+      packaging: duplicatePackaging,
+      machine: duplicateMachine,
+      hasDuplicates: duplicatePackaging.length > 0 || duplicateMachine.length > 0
+    };
+  };
 
   // 時間フォーマット関数
   const formatTimeInput = (input: string): string => {
@@ -330,6 +369,13 @@ const ConfirmationPage: React.FC = () => {
       包装作業記録: newRecords,
     });
     setHasChanges(true);
+
+    // 氏名が変更された場合、重複ハイライトをクリア
+    if (field === '氏名') {
+      const newHighlight = new Set(duplicateHighlight);
+      newHighlight.delete(`packaging-${value}`);
+      setDuplicateHighlight(newHighlight);
+    }
   };
 
   // 包装作業記録の削除
@@ -428,6 +474,13 @@ const ConfirmationPage: React.FC = () => {
       機械操作記録: newRecords,
     });
     setHasChanges(true);
+
+    // 氏名が変更された場合、重複ハイライトをクリア
+    if (field === '氏名') {
+      const newHighlight = new Set(duplicateHighlight);
+      newHighlight.delete(`machine-${value}`);
+      setDuplicateHighlight(newHighlight);
+    }
   };
 
   // 機械操作記録の削除
@@ -570,6 +623,17 @@ const ConfirmationPage: React.FC = () => {
       return;
     }
 
+    // 重複チェック
+    const duplicateCheck = checkForDuplicates(editedData);
+    if (duplicateCheck.hasDuplicates) {
+      setDuplicateInfo({
+        packaging: duplicateCheck.packaging,
+        machine: duplicateCheck.machine
+      });
+      setDuplicateDialogOpen(true);
+      return; // 重複があれば処理を中断
+    }
+
     // 実際の保存処理
     const performSave = async () => {
       setIsSaving(true);
@@ -679,6 +743,31 @@ const ConfirmationPage: React.FC = () => {
   const handleCancelOverwrite = () => {
     setConfirmDialogOpen(false);
     setOverwriteCallback(null);
+  };
+
+  // 重複エラーダイアログのハンドラ
+  const handleDuplicateDialogClose = () => {
+    if (!duplicateInfo) return;
+    
+    // 重複している氏名をハイライト用のSetに追加
+    const highlightSet = new Set<string>();
+    duplicateInfo.packaging.forEach(name => highlightSet.add(`packaging-${name}`));
+    duplicateInfo.machine.forEach(name => highlightSet.add(`machine-${name}`));
+    
+    setDuplicateHighlight(highlightSet);
+    setDuplicateDialogOpen(false);
+    setDuplicateInfo(null);
+    
+    // 重複箇所まで自動スクロール（最初の重複箇所）
+    const allDuplicates = [...duplicateInfo.packaging, ...duplicateInfo.machine];
+    if (allDuplicates.length > 0) {
+      setTimeout(() => {
+        const firstDuplicateElement = document.querySelector('[data-duplicate="true"]');
+        if (firstDuplicateElement) {
+          firstDuplicateElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
   };
 
   const handleBack = () => {
@@ -1058,6 +1147,7 @@ const ConfirmationPage: React.FC = () => {
                         variant="outlined"
                         disabled
                         fullWidth
+                        data-duplicate={duplicateHighlight.has(`packaging-${worker.氏名}`) ? 'true' : 'false'}
                         sx={{
                           '& .MuiInputBase-root': {
                             fontSize: '24px',
@@ -1066,8 +1156,10 @@ const ConfirmationPage: React.FC = () => {
                           '& .MuiOutlinedInput-root': {
                             '&.Mui-disabled': {
                               '& fieldset': {
-                                borderColor: worker.nameConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
-                                borderWidth: worker.nameConfirmationStatus === 'pending' ? '2px' : '1px',
+                                borderColor: duplicateHighlight.has(`packaging-${worker.氏名}`) ? 'error.main' :
+                                            worker.nameConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
+                                borderWidth: (duplicateHighlight.has(`packaging-${worker.氏名}`) || worker.nameConfirmationStatus === 'pending') ? '2px' : '1px',
+                                backgroundColor: duplicateHighlight.has(`packaging-${worker.氏名}`) ? 'rgba(255, 0, 0, 0.1)' : 'transparent',
                               }
                             }
                           }
@@ -1399,6 +1491,7 @@ const ConfirmationPage: React.FC = () => {
                         variant="outlined"
                         disabled
                         fullWidth
+                        data-duplicate={duplicateHighlight.has(`machine-${operation.氏名}`) ? 'true' : 'false'}
                         sx={{
                           '& .MuiInputBase-root': {
                             fontSize: '24px',
@@ -1407,8 +1500,10 @@ const ConfirmationPage: React.FC = () => {
                           '& .MuiOutlinedInput-root': {
                             '&.Mui-disabled': {
                               '& fieldset': {
-                                borderColor: operation.nameConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
-                                borderWidth: operation.nameConfirmationStatus === 'pending' ? '2px' : '1px',
+                                borderColor: duplicateHighlight.has(`machine-${operation.氏名}`) ? 'error.main' :
+                                            operation.nameConfirmationStatus === 'pending' ? 'error.main' : 'rgba(0, 0, 0, 0.23)',
+                                borderWidth: (duplicateHighlight.has(`machine-${operation.氏名}`) || operation.nameConfirmationStatus === 'pending') ? '2px' : '1px',
+                                backgroundColor: duplicateHighlight.has(`machine-${operation.氏名}`) ? 'rgba(255, 0, 0, 0.1)' : 'transparent',
                               }
                             }
                           }
@@ -1779,6 +1874,75 @@ const ConfirmationPage: React.FC = () => {
           }}
         >
           これで正しい
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* 重複エラーダイアログ */}
+    <Dialog
+      open={duplicateDialogOpen}
+      onClose={() => {}}
+      aria-labelledby="duplicate-dialog-title"
+      maxWidth="sm"
+      fullWidth
+      disableEscapeKeyDown
+    >
+      <DialogTitle id="duplicate-dialog-title" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Warning color="error" />
+        重複データが検出されました
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ fontSize: '16px', mb: 2 }}>
+          以下の作業者が重複しています：
+        </DialogContentText>
+        
+        {duplicateInfo?.packaging && duplicateInfo.packaging.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              【包装作業記録】
+            </Typography>
+            <Box sx={{ pl: 2 }}>
+              {duplicateInfo.packaging.map((name, index) => (
+                <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>
+                  • {name} ({editedData?.包装作業記録.filter(r => r.氏名 === name).length}回)
+                </Typography>
+              ))}
+            </Box>
+          </Box>
+        )}
+        
+        {duplicateInfo?.machine && duplicateInfo.machine.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              【機械操作記録】
+            </Typography>
+            <Box sx={{ pl: 2 }}>
+              {duplicateInfo.machine.map((name, index) => (
+                <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>
+                  • {name} ({editedData?.機械操作記録.filter(r => r.氏名 === name).length}回)
+                </Typography>
+              ))}
+            </Box>
+          </Box>
+        )}
+        
+        <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+          <Typography variant="body2" color="info.dark">
+            <strong>修正方法:</strong><br />
+            同じ作業者の複数の時刻は「時刻追加」ボタン（＋）を使用してください。
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button 
+          onClick={handleDuplicateDialogClose} 
+          color="primary" 
+          variant="contained"
+          autoFocus
+          startIcon={<Edit />}
+          sx={{ minWidth: '120px' }}
+        >
+          修正する
         </Button>
       </DialogActions>
     </Dialog>
