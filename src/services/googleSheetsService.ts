@@ -937,10 +937,8 @@ export class GoogleSheetsService {
     const existingData = await this.getCurrentRowData(sheetName, existingRowIndex);
     console.log(`📋 既存行${existingRowIndex}のデータを取得して統合`);
     
-    // 新しい値がある場合のみ上書き（空の場合は既存値を保持）
-    
-    // A列: 日付は既存値を保持（検索に使った値なので変更しない）
-    console.log(`  A列(日付): 既存値 "${existingData[0]}" を保持`);
+    // ⚠️ A列（日付）は検索専用のため絶対に変更しない
+    console.log(`  A列(日付): 既存値 "${existingData[0]}" を保護（変更しません）`);
     
     // C列: 商品名（新しい値がある場合のみ設定）
     if (ocrResult.ヘッダー.商品名) {
@@ -1048,9 +1046,8 @@ export class GoogleSheetsService {
     console.log(`📋 新規行データを作成`);
     const rowData: (string | number)[] = new Array(16).fill('');
     
-    // A列: 日付
-    rowData[0] = workDate;
-    console.log(`  A列(日付): "${workDate}" を設定`);
+    // ⚠️ A列（日付）は検索専用のため設定しない（数式や手動入力を保護）
+    console.log(`  A列(日付): 保護のため設定しません（既存の数式/データを維持）`);
     
     // C列: 商品名（値がある場合のみ設定）
     if (ocrResult.ヘッダー.商品名) {
@@ -1270,15 +1267,16 @@ export class GoogleSheetsService {
     rowData: (string | number)[]
   ): Promise<void> {
     console.log(`🔄 行更新処理開始: ${sheetName} 行${rowIndex}`);
+    console.log(`⚠️ A列（日付）は保護のため更新対象から除外`);
     
-    // バッチ更新用のリクエストを作成（G、I、M、O列をスキップ）
+    // バッチ更新用のリクエストを作成（A列、G、I、M、O列をスキップ）
     const requests = [];
     
-    // A-F列（インデックス0-5）
-    if (rowData.slice(0, 6).some(val => val !== '')) {
+    // B-F列（インデックス1-5）※A列を除外
+    if (rowData.slice(1, 6).some(val => val !== '')) {
       requests.push({
-        range: `${sheetName}!A${rowIndex}:F${rowIndex}`,
-        values: [rowData.slice(0, 6)]
+        range: `${sheetName}!B${rowIndex}:F${rowIndex}`,
+        values: [rowData.slice(1, 6)]
       });
     }
     
@@ -1319,6 +1317,8 @@ export class GoogleSheetsService {
       return;
     }
     
+    console.log(`📝 A列を除外して更新: ${requests.length}個のリクエスト`);
+    
     // バッチ更新実行
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values:batchUpdate?key=${this.getConfig().googleApiKey}`,
@@ -1341,7 +1341,7 @@ export class GoogleSheetsService {
       throw new Error(`行更新エラー: ${errorData.error?.message || response.statusText}`);
     }
     
-    log.debug('行更新API成功');
+    log.debug('行更新API成功（A列保護）');
   }
 
   /**
@@ -1352,8 +1352,9 @@ export class GoogleSheetsService {
     rowData: (string | number)[]
   ): Promise<void> {
     console.log(`➕ 行追加処理開始: ${sheetName}`);
+    console.log(`⚠️ A列（日付）は保護のため追加対象から除外`);
     
-    // スプレッドシートに送信するデータを準備（G、I、M、O列は後でスキップ）
+    // スプレッドシートに送信するデータを準備（A列、G、I、M、O列は後でスキップ）
     const cleanRowData = [...rowData];
     
     // 最初の空行を探すために範囲を指定
@@ -1373,14 +1374,14 @@ export class GoogleSheetsService {
     const data = await response.json();
     const nextRow = (data.values?.length || 0) + 1;
     
-    // バッチ更新でG、I、M、O列をスキップして追加
+    // バッチ更新でA列、G、I、M、O列をスキップして追加
     const requests = [];
     
-    // A-F列
-    if (cleanRowData.slice(0, 6).some(val => val !== '')) {
+    // B-F列（A列を除外）
+    if (cleanRowData.slice(1, 6).some(val => val !== '')) {
       requests.push({
-        range: `${sheetName}!A${nextRow}:F${nextRow}`,
-        values: [cleanRowData.slice(0, 6)]
+        range: `${sheetName}!B${nextRow}:F${nextRow}`,
+        values: [cleanRowData.slice(1, 6)]
       });
     }
     
@@ -1416,6 +1417,8 @@ export class GoogleSheetsService {
       });
     }
     
+    console.log(`📝 A列を除外して追加: ${requests.length}個のリクエスト`);
+    
     // バッチ更新実行
     const updateResponse = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values:batchUpdate?key=${this.getConfig().googleApiKey}`,
@@ -1438,7 +1441,7 @@ export class GoogleSheetsService {
       throw new Error(`行追加エラー: ${errorData.error?.message || updateResponse.statusText}`);
     }
     
-    log.debug('行追加API成功');
+    log.debug('行追加API成功（A列保護）');
   }
 
   /**
