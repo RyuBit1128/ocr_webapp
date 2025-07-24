@@ -606,20 +606,31 @@ export class GoogleSheetsService {
       // 失敗した作業者を追跡
       const failedWorkers: string[] = [];
 
-      // 各作業者の個人シートに保存
-      const savePromises = allWorkers.map(async (workerName) => {
+      // 各作業者の個人シートに保存（順次実行でAPI制限を回避）
+      console.log('⏳ 作業者データを順次保存します（API制限回避のため）...');
+      
+      for (let i = 0; i < allWorkers.length; i++) {
+        const workerName = allWorkers[i];
         try {
+          console.log(`🔄 ${i + 1}/${allWorkers.length}: ${workerName} のデータを保存中...`);
           await this.saveWorkerData(workerName, ocrResult);
+          
+          // API制限回避のため少し待機（複数作業者の場合）
+          if (i < allWorkers.length - 1 && allWorkers.length > 1) {
+            console.log('⏱️ API制限回避のため2秒待機...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+          
         } catch (error) {
           if (error instanceof Error && error.message.includes('個人シートがありません')) {
             failedWorkers.push(workerName);
+            console.log(`⚠️ ${workerName}: 個人シートなしのためスキップ`);
           } else {
+            console.error(`❌ ${workerName}: 保存エラー`, error);
             throw error;
           }
         }
-      });
-
-      await Promise.all(savePromises);
+      }
       
       if (failedWorkers.length > 0) {
         console.log(`⚠️ 以下の作業者の保存に失敗しました: ${failedWorkers.join(', ')}`);
@@ -631,7 +642,21 @@ export class GoogleSheetsService {
 
     } catch (error) {
       console.error('❌ 個人シート保存エラー:', error);
-      throw new Error('データの保存に失敗しました。ネットワーク接続を確認してください。');
+      
+      // API制限エラーの場合は明確なメッセージを表示
+      if (error instanceof Error) {
+        if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('quota')) {
+          throw new Error('Google APIの利用制限に達しました。少し時間をおいてから再度お試しください。');
+        }
+        if (error.message.includes('403') && error.message.includes('RESOURCE_EXHAUSTED')) {
+          throw new Error('APIの同時実行制限に達しました。少し時間をおいてから再度お試しください。');
+        }
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          throw new Error('ネットワークエラーが発生しました。インターネット接続を確認してください。');
+        }
+      }
+      
+      throw new Error('データの保存に失敗しました。しばらく待ってから再度お試しください。');
     }
   }
 
@@ -778,7 +803,7 @@ export class GoogleSheetsService {
     try {
       console.log(`🔍 既存行検索開始: シート "${sheetName}", 対象日付 "${workDate}"`);
       
-      const response = await fetch(
+      const response = await this.fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A:A?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
@@ -796,12 +821,12 @@ export class GoogleSheetsService {
       const values = data.values || [];
       console.log(`📊 A列データ取得完了: ${values.length}行`);
       
-      // すべてのA列の値をログ出力（デバッグ用）
-      values.forEach((row: any[], index: number) => {
-        if (row[0]) {
-          console.log(`  A${index + 1}: "${row[0]}" ${row[0] === workDate ? '🎯 一致!' : ''}`);
-        }
-      });
+      // デバッグログは性能に影響するため削除（必要時のみ有効化）
+      // values.forEach((row: any[], index: number) => {
+      //   if (row[0]) {
+      //     console.log(`  A${index + 1}: "${row[0]}" ${row[0] === workDate ? '🎯 一致!' : ''}`);
+      //   }
+      // });
       
       // A列の各セルで日付を検索（完全一致）
       for (let i = 0; i < values.length; i++) {
@@ -1416,6 +1441,57 @@ export class GoogleSheetsService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * リトライ機能付きのfetch実行
+   */
+  private static async fetchWithRetry(
+    url: string, 
+    options: RequestInit, 
+    maxRetries: number = 3,
+    delay: number = 1000
+  ): Promise<Response> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 API呼び出し試行 ${attempt}/${maxRetries}: ${url}`);
+        const response = await fetch(url, options);
+        
+        // 429 (Too Many Requests) の場合は待機してリトライ
+        if (response.status === 429) {
+          if (attempt < maxRetries) {
+            const waitTime = delay * Math.pow(2, attempt - 1); // 指数バックオフ
+            console.log(`⏱️ API制限のため ${waitTime}ms 待機してリトライ...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          }
+        }
+        
+        // 5xx系エラーの場合もリトライ
+        if (response.status >= 500 && response.status < 600) {
+          if (attempt < maxRetries) {
+            console.log(`⚠️ サーバーエラー(${response.status})のため ${delay}ms 待機してリトライ...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        
+        return response;
+        
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown fetch error');
+        
+        if (attempt < maxRetries) {
+          console.log(`⚠️ ネットワークエラーのため ${delay}ms 待機してリトライ...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+    }
+    
+    throw lastError || new Error('Max retries exceeded');
   }
 }
 
