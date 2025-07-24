@@ -84,6 +84,80 @@ export class OpenAIOcrService {
   }
 
   /**
+   * 途中で切れたJSONを修復
+   */
+  private static repairIncompleteJson(jsonString: string): string {
+    try {
+      // 既に正常なJSONの場合はそのまま返す
+      JSON.parse(jsonString);
+      return jsonString;
+    } catch {
+      log.debug('JSONが不完全のため修復を試行');
+      
+      let repairedJson = jsonString.trim();
+      
+      // 1. 最後のカンマ後に不完全な要素がある場合は削除
+      repairedJson = repairedJson.replace(/,\s*$/, '');
+      repairedJson = repairedJson.replace(/,\s*[^}\]]*$/, '');
+      
+      // 2. 不完全な文字列値を修復
+      repairedJson = repairedJson.replace(/"[^"]*$/, '""');
+      
+      // 3. 開いたオブジェクトや配列を閉じる
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inString = false;
+      let escapeNext = false;
+      
+      for (let i = 0; i < repairedJson.length; i++) {
+        const char = repairedJson[i];
+        
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+        
+        if (char === '\\') {
+          escapeNext = true;
+          continue;
+        }
+        
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        
+        if (inString) continue;
+        
+        if (char === '{') openBraces++;
+        if (char === '}') openBraces--;
+        if (char === '[') openBrackets++;
+        if (char === ']') openBrackets--;
+      }
+      
+      // 開いたままの括弧を閉じる
+      while (openBrackets > 0) {
+        repairedJson += ']';
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        repairedJson += '}';
+        openBraces--;
+      }
+      
+      // 修復したJSONが正常かテスト
+      try {
+        JSON.parse(repairedJson);
+        log.debug('JSON修復成功');
+        return repairedJson;
+      } catch {
+        log.warn('JSON修復失敗 - 元のJSONを返します');
+        return jsonString;
+      }
+    }
+  }
+
+  /**
    * OpenAI Vision APIでOCR処理を実行
    */
   static async processImage(
@@ -125,7 +199,7 @@ export class OpenAIOcrService {
             ]
           }
         ],
-        max_tokens: 1000, // レスポンスのトークン数を制限
+        max_tokens: 3000, // トークン数を増やしてJSONの途中切断を防止
         temperature: 0.1, // 低い温度で安定した結果を得る
       };
 
@@ -165,14 +239,53 @@ export class OpenAIOcrService {
       // JSONレスポンスを解析
       const parseOcrResult = (): OcrResult => {
         try {
-          // JSONブロックを抽出（```json ... ``` の場合に対応）
-          const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-          const jsonString = jsonMatch ? jsonMatch[1] : content;
+          // デバッグ用：実際のレスポンス内容を表示（開発環境のみ）
+          log.dev('OpenAI APIレスポンス内容:', content);
           
-          return JSON.parse(jsonString.trim());
+          // 複数のパターンでJSONブロックを抽出
+          let jsonString = content.trim();
+          
+          // パターン1: ```json...``` ブロック
+          const jsonBlockMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonBlockMatch) {
+            jsonString = jsonBlockMatch[1].trim();
+            log.debug('```json ブロック形式で解析');
+          }
+          // パターン2: ```...``` ブロック（言語指定なし）
+          else {
+            const codeBlockMatch = content.match(/```\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch) {
+              jsonString = codeBlockMatch[1].trim();
+              log.debug('```コードブロック形式で解析');
+            }
+            // パターン3: { で始まる部分を抽出
+            else {
+              const jsonStartIndex = content.indexOf('{');
+              const jsonEndIndex = content.lastIndexOf('}');
+              if (jsonStartIndex !== -1 && jsonEndIndex !== -1 && jsonEndIndex > jsonStartIndex) {
+                jsonString = content.substring(jsonStartIndex, jsonEndIndex + 1).trim();
+                log.debug('JSON部分を直接抽出');
+              }
+              else {
+                log.debug('生のレスポンスをそのまま解析');
+              }
+            }
+          }
+          
+          // JSONが不完全な場合の修復処理
+          jsonString = this.repairIncompleteJson(jsonString);
+          
+          // デバッグ用：抽出したJSON文字列の最初と最後の文字を確認
+          log.debug(`JSON解析前: 長さ=${jsonString.length}, 開始="${jsonString.substring(0, 10)}", 終了="${jsonString.substring(jsonString.length - 10)}"`);
+          
+          return JSON.parse(jsonString);
         } catch (parseError) {
           log.error('JSON解析エラー', parseError);
           log.debug('レスポンス内容長', content.length);
+          
+          // エラー詳細を開発環境でのみ表示
+          log.dev('解析に失敗したレスポンス（最初の500文字）:', content.substring(0, 500));
+          
           throw new Error('OCR結果の解析に失敗しました。画像が不鮮明な可能性があります。');
         }
       };

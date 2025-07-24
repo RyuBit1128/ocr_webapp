@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   LinearProgress,
-  CircularProgress,
   Paper,
+  CircularProgress,
+  Alert,
+  AlertTitle,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import { useAppStore } from '@/stores/appStore';
 import { OpenAIOcrService } from '@/services/ocrService';
@@ -20,23 +25,24 @@ import { log } from '@/utils/logger';
 
 const ProcessingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [progress, setProgress] = useState(0);
-  const [statusMessage, setStatusMessage] = useState('画像を分析中...');
-  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
-  
   const {
     capturedImage,
     setOcrResult,
     setCurrentStep,
-    setError,
-    setIsProcessing,
     error,
-    resetData,
+    setError,
+    isProcessing,
+    setIsProcessing,
   } = useAppStore();
 
-  // 撮影画像がない場合はカメラページに戻る
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('処理を開始しています...');
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+
+  // 画像がない場合はカメラページに戻る
   useEffect(() => {
     if (!capturedImage) {
+      log.debug('キャプチャ画像がないためカメラページに戻ります');
       navigate('/camera');
       return;
     }
@@ -44,15 +50,20 @@ const ProcessingPage: React.FC = () => {
 
   // OCR処理状態を管理
   const [hasProcessed, setHasProcessed] = useState(false);
+  const processingRef = useRef(false); // React Strict Mode対応
 
   // 実際のOCR処理
   useEffect(() => {
     if (!capturedImage) return;
     
     // 既に処理済み、またはエラーがある場合は処理しない
-    if (hasProcessed || error) return;
+    if (hasProcessed || error || processingRef.current) return;
 
     const processImage = async () => {
+      // React Strict Mode での重複実行を防ぐ
+      if (processingRef.current) return;
+      processingRef.current = true;
+      
       setIsProcessing(true);
       setCurrentStep(2);
       setHasProcessed(true); // 処理開始をマーク
@@ -88,34 +99,39 @@ const ProcessingPage: React.FC = () => {
         // デフォルトの作業日を今日の日付に設定
                   if (!correctedResult.ヘッダー.作業日 || correctedResult.ヘッダー.作業日 === 'undefined') {
             const today = new Date();
-            correctedResult.ヘッダー.作業日 = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
-            log.debug('作業日をデフォルト値に設定', correctedResult.ヘッダー.作業日);
+            const formattedDate = `${today.getFullYear()}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}`;
+            correctedResult.ヘッダー.作業日 = formattedDate;
+            log.info('作業日を今日の日付に設定', formattedDate);
           }
-        
+
+        // プログレス完了
         setProgress(100);
-        setStatusMessage('処理完了！');
+        setStatusMessage('処理完了');
+
+        // 結果をストアに保存
         setOcrResult(correctedResult);
-                  setCurrentStep(3);
-          
-          log.process('OCR処理完了 - 確認画面に移動');
-          setTimeout(() => {
-            navigate('/confirmation');
-          }, 1000);
         
+        // 短い遅延の後に確認画面に遷移
+        setTimeout(() => {
+          navigate('/confirmation');
+        }, 1000);
+
       } catch (error) {
-        log.error('OCR処理エラー:', error);
-        
-        let errorMessage = '文字認識に失敗しました。もう一度撮影してください。';
-        
-        if (error instanceof Error) {
-          if (error.message.includes('API')) {
-            errorMessage = error.message;
-          } else if (error.message.includes('環境変数')) {
-            errorMessage = 'API設定に問題があります。管理者にお問い合わせください。';
+          log.error('OCR処理エラー:', error);
+          
+          let errorMessage = '画像の処理中にエラーが発生しました。';
+          
+          if (error instanceof Error) {
+            if (error.message.includes('API')) {
+              errorMessage = 'APIエラーが発生しました。しばらく待ってから再試行してください。';
+            } else if (error.message.includes('ネットワーク')) {
+              errorMessage = 'ネットワークエラーが発生しました。接続を確認してください。';
+            } else {
+              errorMessage = error.message;
+            }
           }
-        }
-        
-                  setError({
+          
+          setError({
             type: 'OCR_ERROR',
             message: errorMessage,
             details: error,
@@ -124,6 +140,8 @@ const ProcessingPage: React.FC = () => {
           setErrorDialogOpen(true);
       } finally {
         setIsProcessing(false);
+        // 処理完了後にフラグをリセット（エラー時の再試行を可能にする）
+        processingRef.current = false;
       }
     };
 
@@ -137,18 +155,11 @@ const ProcessingPage: React.FC = () => {
     }
   }, [error]);
 
-
-      const handleErrorConfirm = () => {
-      log.debug('確認ボタンが押された');
-      // ローカル状態をリセット
-      setErrorDialogOpen(false);
-    setHasProcessed(false);
-    setProgress(0);
-    setStatusMessage('画像を分析中...');
-    // グローバル状態をリセット
-    resetData();
-    // replaceを使って履歴を置き換え、確実に遷移
-    navigate('/camera', { replace: true });
+  // エラーダイアログを閉じる
+  const handleCloseErrorDialog = () => {
+    setErrorDialogOpen(false);
+    setError(null);
+    navigate('/camera');
   };
 
   if (error) {
@@ -189,7 +200,7 @@ const ProcessingPage: React.FC = () => {
         {/* エラーダイアログ */}
         <Dialog
           open={errorDialogOpen}
-          onClose={() => {}}
+          onClose={handleCloseErrorDialog}
           aria-labelledby="error-dialog-title"
           aria-describedby="error-dialog-description"
           maxWidth="sm"
@@ -207,7 +218,7 @@ const ProcessingPage: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button 
-              onClick={handleErrorConfirm} 
+              onClick={handleCloseErrorDialog} 
               color="primary" 
               variant="contained"
               autoFocus
