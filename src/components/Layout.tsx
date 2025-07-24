@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   AppBar,
@@ -10,9 +10,27 @@ import {
   StepLabel,
   Alert,
   Snackbar,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Avatar,
+  Divider,
 } from '@mui/material';
-import { CameraAlt, Search, CheckCircle, Done } from '@mui/icons-material';
+import { 
+  CameraAlt, 
+  Search, 
+  CheckCircle, 
+  Done,
+  AccountCircle,
+  Logout,
+  Settings,
+  Person,
+} from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
+import { GoogleSheetsService } from '@/services/googleSheetsService';
+import { TokenExpiryService } from '@/services/tokenExpiryService';
 import ConnectionStatus from './ConnectionStatus';
 
 interface LayoutProps {
@@ -28,6 +46,7 @@ const steps = [
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { currentStep, error, success, setError, setSuccess } = useAppStore();
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
 
   const handleCloseError = () => {
     setError(null);
@@ -37,6 +56,61 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setSuccess(null);
   };
 
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setUserMenuAnchor(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserMenuAnchor(null);
+  };
+
+  const handleLogout = () => {
+    // 確認ダイアログを表示
+    const confirmed = window.confirm(
+      '🔓 ログアウトしますか？\n\n' +
+      'Google認証が解除され、次回利用時に再度ログインが必要になります。'
+    );
+    
+    if (confirmed) {
+      try {
+        // トークン監視を停止
+        TokenExpiryService.stopMonitoring();
+        
+        // localStorage からトークンを削除
+        localStorage.removeItem('google_access_token');
+        localStorage.removeItem('google_token_expires_at');
+        
+        // マスターデータキャッシュもクリア
+        localStorage.removeItem('master_data_cache');
+        localStorage.removeItem('master_data_cache_timestamp');
+        
+        console.log('🔓 ログアウト完了');
+        
+        // ページを再読み込みして初期状態に戻す
+        window.location.reload();
+        
+      } catch (error) {
+        console.error('❌ ログアウトエラー:', error);
+        alert('ログアウト処理でエラーが発生しました。ページを再読み込みしてください。');
+      }
+    }
+    
+    handleUserMenuClose();
+  };
+
+  const handleReAuth = () => {
+    try {
+      console.log('🔄 再認証を開始します');
+      GoogleSheetsService.authenticate();
+    } catch (error) {
+      console.error('❌ 再認証エラー:', error);
+    }
+    handleUserMenuClose();
+  };
+
+  // 認証状態を確認
+  const isAuthenticated = !!localStorage.getItem('google_access_token');
+
   return (
     <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* ヘッダー */}
@@ -45,6 +119,72 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
             📋 作業記録簿OCR
           </Typography>
+          
+          {/* ユーザーメニュー */}
+          <IconButton
+            size="large"
+            edge="end"
+            color="inherit"
+            onClick={handleUserMenuOpen}
+            sx={{ ml: 2 }}
+          >
+            <Avatar sx={{ width: 32, height: 32 }}>
+              <AccountCircle />
+            </Avatar>
+          </IconButton>
+          
+          <Menu
+            anchorEl={userMenuAnchor}
+            open={Boolean(userMenuAnchor)}
+            onClose={handleUserMenuClose}
+            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            PaperProps={{
+              sx: {
+                minWidth: 200,
+                mt: 1,
+              }
+            }}
+          >
+            <MenuItem disabled>
+              <ListItemIcon>
+                <Person fontSize="small" />
+              </ListItemIcon>
+              <ListItemText 
+                primary="アカウント" 
+                secondary={isAuthenticated ? 'Google認証済み' : '未認証'}
+              />
+            </MenuItem>
+            
+            <Divider />
+            
+            {isAuthenticated && (
+              <MenuItem onClick={handleReAuth}>
+                <ListItemIcon>
+                  <Settings fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="再認証" />
+              </MenuItem>
+            )}
+            
+            {isAuthenticated && (
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon>
+                  <Logout fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="ログアウト" />
+              </MenuItem>
+            )}
+            
+            {!isAuthenticated && (
+              <MenuItem onClick={handleReAuth}>
+                <ListItemIcon>
+                  <Settings fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="ログイン" />
+              </MenuItem>
+            )}
+          </Menu>
         </Toolbar>
       </AppBar>
 
