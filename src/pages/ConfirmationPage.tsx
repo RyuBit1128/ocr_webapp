@@ -43,7 +43,7 @@ import { log } from '@/utils/logger';
 
 const ConfirmationPage: React.FC = () => {
   const navigate = useNavigate();
-  const { ocrResult, setCurrentStep, setSuccess } = useAppStore();
+  const { ocrResult, setCurrentStep, setSuccess, resetData } = useAppStore();
   const { masterData, loading: masterDataLoading, error: masterDataError, refetch: refetchMasterData } = useMasterData();
   const [editedData, setEditedData] = useState<OcrResult | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -889,6 +889,7 @@ const ConfirmationPage: React.FC = () => {
         return;
       }
     }
+    resetData();  // 全状態をリセット（currentStep: 1に戻る）
     navigate('/camera');
   };
 
