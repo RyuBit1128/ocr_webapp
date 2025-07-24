@@ -1050,25 +1050,23 @@ const ConfirmationPage: React.FC = () => {
                       variant="contained"
                       color="warning"
                       size="small"
-                      startIcon={<HelpOutline />}
                       onClick={() => openConfirmPopup('product', editedData.ヘッダー.商品名)}
-                      sx={{ minWidth: '80px', whiteSpace: 'nowrap' }}
+                      sx={{ minWidth: '80px', whiteSpace: 'nowrap', fontSize: '20px' }}
                     >
-                      確認
+                      修正
                     </Button>
                   ) : (
                     <Button
                       variant="contained"
                       color="success"
                       size="small"
-                      startIcon={<Check />}
                       onClick={() => {
                         updateProductConfirmationStatus('editing');
                         setAutoOpenDropdowns(new Set(['product']));
                       }}
-                      sx={{ minWidth: '60px', whiteSpace: 'nowrap' }}
+                      sx={{ minWidth: '60px', whiteSpace: 'nowrap', fontSize: '20px' }}
                     >
-                      OK
+                      変更
                     </Button>
                   )}
                 </Box>
@@ -1280,8 +1278,17 @@ const ConfirmationPage: React.FC = () => {
                           variant="contained"
                           color="warning"
                           size="small"
-                          onClick={() => openConfirmPopup('packaging', worker.氏名, index)}
-                          sx={{ minWidth: '60px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                          onClick={() => {
+                            if (!worker.氏名 || worker.氏名.trim() === '') {
+                              // 氏名が空の場合（新規追加）は直接編集モードへ
+                              updatePackagingNameConfirmationStatus(index, 'editing');
+                              setAutoOpenDropdowns(new Set([`packaging-${index}`]));
+                            } else {
+                              // 既存の氏名がある場合は確認画面を表示
+                              openConfirmPopup('packaging', worker.氏名, index);
+                            }
+                          }}
+                          sx={{ minWidth: '60px', fontSize: '20px', whiteSpace: 'nowrap' }}
                         >
                           修正
                         </Button>
@@ -1294,7 +1301,7 @@ const ConfirmationPage: React.FC = () => {
                             updatePackagingNameConfirmationStatus(index, 'editing');
                             setAutoOpenDropdowns(new Set([`packaging-${index}`]));
                           }}
-                          sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                          sx={{ minWidth: '50px', fontSize: '20px', whiteSpace: 'nowrap' }}
                         >
                           変更
                         </Button>
@@ -1675,8 +1682,17 @@ const ConfirmationPage: React.FC = () => {
                           variant="contained"
                           color="warning"
                           size="small"
-                          onClick={() => openConfirmPopup('machine', operation.氏名, index)}
-                          sx={{ minWidth: '60px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                          onClick={() => {
+                            if (!operation.氏名 || operation.氏名.trim() === '') {
+                              // 氏名が空の場合（新規追加）は直接編集モードへ
+                              updateMachineNameConfirmationStatus(index, 'editing');
+                              setAutoOpenDropdowns(new Set([`machine-${index}`]));
+                            } else {
+                              // 既存の氏名がある場合は確認画面を表示
+                              openConfirmPopup('machine', operation.氏名, index);
+                            }
+                          }}
+                          sx={{ minWidth: '60px', fontSize: '20px', whiteSpace: 'nowrap' }}
                         >
                           修正
                         </Button>
@@ -1689,7 +1705,7 @@ const ConfirmationPage: React.FC = () => {
                             updateMachineNameConfirmationStatus(index, 'editing');
                             setAutoOpenDropdowns(new Set([`machine-${index}`]));
                           }}
-                          sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                          sx={{ minWidth: '50px', fontSize: '20px', whiteSpace: 'nowrap' }}
                         >
                           変更
                         </Button>
