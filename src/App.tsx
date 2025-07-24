@@ -12,6 +12,7 @@ import ConfirmationPage from '@/pages/ConfirmationPage';
 import SuccessPage from '@/pages/SuccessPage';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { TokenExpiryService } from '@/services/tokenExpiryService';
+import { log } from '@/utils/logger';
 
 function App() {
   // アプリ起動時に認証リダイレクトをチェック
@@ -19,7 +20,7 @@ function App() {
     try {
       const wasRedirected = GoogleSheetsService.handleAuthRedirect();
       if (wasRedirected) {
-        console.log('🎉 Google認証が完了しました！');
+        log.success('Google認証が完了しました');
         // 認証完了後にトークン監視を開始
         TokenExpiryService.resetMonitoring();
       } else {
@@ -30,13 +31,13 @@ function App() {
         if (token && expiresAt) {
           const expiryTime = parseInt(expiresAt, 10);
           if (Date.now() < expiryTime) {
-            console.log('🔄 既存のトークンで監視を開始します');
+            log.debug('既存のトークンで監視を開始');
             TokenExpiryService.startMonitoring();
           }
         }
       }
     } catch (error) {
-      console.error('❌ 認証リダイレクト処理エラー:', error);
+      log.error('認証リダイレクト処理エラー', error);
     }
 
     // 開発環境でのテスト用グローバル関数
@@ -47,7 +48,7 @@ function App() {
         stopMonitoring: () => TokenExpiryService.stopMonitoring(),
         getStatus: () => TokenExpiryService.getMonitoringStatus(),
       };
-      console.log('🧪 開発モード: ブラウザコンソールで authTest.showDialog() でテスト可能');
+      log.dev('開発モード: ブラウザコンソールで authTest.showDialog() でテスト可能');
     }
   }, []);
 

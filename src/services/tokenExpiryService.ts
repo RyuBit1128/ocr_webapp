@@ -2,6 +2,8 @@
  * トークン期限監視サービス
  * 認証期限の10分前に警告を表示し、ユーザーに更新を促す
  */
+import { log } from '@/utils/logger';
+
 export class TokenExpiryService {
   private static warningShown = false;
   private static monitoringTimer: NodeJS.Timeout | null = null;
@@ -14,19 +16,19 @@ export class TokenExpiryService {
     this.stopMonitoring(); // 既存の監視を停止
     
     const expiresAt = localStorage.getItem('google_token_expires_at');
-    if (!expiresAt) {
-      console.log('⚠️ トークン期限情報がありません');
-      return;
-    }
-    
-    const expiryTime = parseInt(expiresAt, 10);
-    const now = Date.now();
-    const timeUntilExpiry = expiryTime - now;
-    
-    if (timeUntilExpiry <= 0) {
-      console.log('⚠️ トークンは既に期限切れです');
-      return;
-    }
+          if (!expiresAt) {
+        log.debug('トークン期限情報がありません');
+        return;
+      }
+      
+      const expiryTime = parseInt(expiresAt, 10);
+      const now = Date.now();
+      const timeUntilExpiry = expiryTime - now;
+      
+      if (timeUntilExpiry <= 0) {
+        log.debug('トークンは既に期限切れです');
+        return;
+      }
     
     // 10分前に警告（最低5秒後に実行）
     const warningTime = Math.max(timeUntilExpiry - (10 * 60 * 1000), 5000);
@@ -35,10 +37,12 @@ export class TokenExpiryService {
       this.showRenewalDialog();
     }, warningTime);
     
-    const expiryDate = new Date(expiryTime);
-    const warningDate = new Date(now + warningTime);
-    console.log(`⏰ 認証監視開始: ${expiryDate.toLocaleTimeString()}まで有効`);
-    console.log(`⏰ 警告予定時刻: ${warningDate.toLocaleTimeString()}`);
+          const expiryDate = new Date(expiryTime);
+      const warningDate = new Date(now + warningTime);
+      log.debug('認証監視開始', {
+        expiryTime: expiryDate.toLocaleTimeString(),
+        warningTime: warningDate.toLocaleTimeString()
+      });
   }
   
   /**
@@ -48,7 +52,7 @@ export class TokenExpiryService {
     if (this.warningShown) return;
     this.warningShown = true;
     
-    console.log('🔔 認証更新ダイアログを表示します');
+          log.production('認証更新ダイアログを表示');
     
     // カスタムイベントでダイアログ表示を要求
     const event = new CustomEvent('show-auth-renewal-dialog', {
@@ -86,17 +90,17 @@ export class TokenExpiryService {
       this.countdownTimer = null;
     }
     this.warningShown = false;
-    console.log('⏹️ トークン監視を停止しました');
+          log.debug('トークン監視を停止');
   }
   
   /**
    * 監視をリセット（認証成功後に使用）
    */
-  static resetMonitoring(): void {
-    console.log('🔄 トークン監視をリセットします');
-    this.warningShown = false;
-    this.startMonitoring();
-  }
+      static resetMonitoring(): void {
+      log.debug('トークン監視をリセット');
+      this.warningShown = false;
+      this.startMonitoring();
+    }
   
   /**
    * 現在の監視状態を取得
@@ -122,8 +126,8 @@ export class TokenExpiryService {
    * デバッグ用: テスト用ダイアログを即座に表示
    * 開発・デバッグ時のみ使用
    */
-  static showTestDialog(): void {
-    console.log('🧪 テスト用認証ダイアログを表示します');
+      static showTestDialog(): void {
+      log.dev('テスト用認証ダイアログを表示');
     
     const event = new CustomEvent('show-auth-renewal-dialog', {
       detail: {
@@ -137,10 +141,10 @@ export class TokenExpiryService {
    * デバッグ用: 短時間でのテスト監視を開始（5秒後に警告）
    * 開発・デバッグ時のみ使用
    */
-  static startTestMonitoring(): void {
-    this.stopMonitoring();
-    
-    console.log('🧪 テスト監視を開始します（5秒後に警告表示）');
+      static startTestMonitoring(): void {
+      this.stopMonitoring();
+      
+      log.dev('テスト監視を開始（5秒後に警告表示）');
     
     this.monitoringTimer = setTimeout(() => {
       this.showRenewalDialog();

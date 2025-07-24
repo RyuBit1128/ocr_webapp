@@ -1,6 +1,7 @@
 import { OcrResult, PackagingRecord, MachineOperationRecord } from '@/types';
 import { FuzzyMatchService } from './fuzzyMatchService';
 import { GoogleSheetsService } from './googleSheetsService';
+import { log } from '@/utils/logger';
 
 /**
  * OCR結果のデータ補正サービス
@@ -12,9 +13,11 @@ export class DataCorrectionService {
   static async correctOcrResult(ocrResult: OcrResult): Promise<OcrResult> {
     const masterData = await GoogleSheetsService.getMasterData();
     
-    console.log('🔧 データ補正開始');
-    console.log(`📊 マスターデータ: 従業員${masterData.employees.length}名, 商品${masterData.products.length}種類`);
-    console.log('👥 マスターデータ従業員一覧:', masterData.employees);
+    log.process('データ補正開始');
+    log.debug('マスターデータ取得完了', {
+      employees: masterData.employees.length,
+      products: masterData.products.length
+    });
     
     // ヘッダー情報の補正
     const correctedHeader = await this.correctHeader(ocrResult.ヘッダー, masterData.products);
@@ -37,35 +40,31 @@ export class DataCorrectionService {
       機械操作記録: correctedMachine
     };
     
-    // 補正結果のログ出力
-    console.log('========================');
-    console.log('🔧 データ補正結果');
-    console.log('========================');
+    // 補正結果のログ出力（開発環境のみ）
+    log.process('データ補正完了');
     
     // 商品名の補正結果
     if (correctedHeader.originalProductName) {
-      console.log(`📦 商品名補正: ${correctedHeader.originalProductName} → ${correctedHeader.商品名} (${Math.round((correctedHeader.productConfidence || 0) * 100)}%)`);
+      log.debug('商品名補正実行', {
+        confidence: Math.round((correctedHeader.productConfidence || 0) * 100)
+      });
     }
     
     // 包装作業者の補正結果
-    console.log('\n👥 包装作業者名補正:');
-    correctedPackaging.forEach((record, index) => {
-      // すべての記録を表示（originalNameの有無に関係なく）
-      const confidenceColor = (record.confidence || 0) >= 0.9 ? '🟢' : (record.confidence || 0) >= 0.5 ? '🟡' : '🔴';
-      const originalName = record.originalName || record.氏名;
-      console.log(`  ${index + 1}. ${originalName} → ${record.氏名} ${confidenceColor}(${Math.round((record.confidence || 0) * 100)}%)`);
-    });
+    if (correctedPackaging.length > 0) {
+      log.debug('包装作業者名補正完了', { count: correctedPackaging.length });
+      correctedPackaging.forEach((record, index) => {
+        log.dev(`包装作業者${index + 1}: ${record.originalName || record.氏名} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
+      });
+    }
     
     // 機械操作者の補正結果
-    console.log('\n⚙️ 機械操作者名補正:');
-    correctedMachine.forEach((record, index) => {
-      // すべての記録を表示（originalNameの有無に関係なく）
-      const confidenceColor = (record.confidence || 0) >= 0.9 ? '🟢' : (record.confidence || 0) >= 0.5 ? '🟡' : '🔴';
-      const originalName = record.originalName || record.氏名;
-      console.log(`  ${index + 1}. ${originalName} → ${record.氏名} ${confidenceColor}(${Math.round((record.confidence || 0) * 100)}%)`);
-    });
-    
-    console.log('========================');
+    if (correctedMachine.length > 0) {
+      log.debug('機械操作者名補正完了', { count: correctedMachine.length });
+      correctedMachine.forEach((record, index) => {
+        log.dev(`機械操作者${index + 1}: ${record.originalName || record.氏名} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
+      });
+    }
     
     return correctedResult;
   }
@@ -115,7 +114,7 @@ export class DataCorrectionService {
       // スプレッドシートに記載されている人しかいない前提で必ず最も近い人を選択
       if (record.氏名) {
         const nameMatch = FuzzyMatchService.findBestMatch(record.氏名, employees);
-        console.log(`🔍 マッチング結果 - 入力: ${record.氏名}, マッチ: ${nameMatch.match}, 信頼度: ${nameMatch.confidence}`);
+        log.dev(`包装作業マッチング: ${record.氏名} → ${nameMatch.match} (${Math.round((nameMatch.confidence || 0) * 100)}%)`);
         
         if (nameMatch.match) {
           // 元の名前を記録（補正結果の表示用）
@@ -128,7 +127,9 @@ export class DataCorrectionService {
           // 信頼度が低い場合はエラーフラグを設定
           if (nameMatch.confidence < 0.4) {
             correctedRecord.nameError = true;
-            console.log(`🔴 エラーフラグ設定: ${record.氏名} → ${nameMatch.match} (${Math.round(nameMatch.confidence * 100)}%)`);
+            log.warn('包装作業者名マッチング信頼度が低い', {
+              confidence: Math.round(nameMatch.confidence * 100)
+            });
           }
         } else {
           // マッチが見つからない場合（信頼度0%）
@@ -137,7 +138,7 @@ export class DataCorrectionService {
           correctedRecord.confidence = 0;
           correctedRecord.matchType = 'no_match';
           correctedRecord.nameError = true;
-          console.log(`🔴 マッチなし: ${record.氏名} - エラーフラグ設定`);
+          log.warn('包装作業者名マッチング失敗 - エラーフラグ設定');
         }
       }
       
@@ -159,7 +160,7 @@ export class DataCorrectionService {
       // スプレッドシートに記載されている人しかいない前提で必ず最も近い人を選択
       if (record.氏名) {
         const nameMatch = FuzzyMatchService.findBestMatch(record.氏名, employees);
-        console.log(`🔍 マッチング結果 - 入力: ${record.氏名}, マッチ: ${nameMatch.match}, 信頼度: ${nameMatch.confidence}`);
+        log.dev(`機械操作マッチング: ${record.氏名} → ${nameMatch.match} (${Math.round((nameMatch.confidence || 0) * 100)}%)`);
         
         if (nameMatch.match) {
           // 元の名前を記録（補正結果の表示用）
@@ -172,7 +173,9 @@ export class DataCorrectionService {
           // 信頼度が低い場合はエラーフラグを設定
           if (nameMatch.confidence < 0.4) {
             correctedRecord.nameError = true;
-            console.log(`🔴 エラーフラグ設定: ${record.氏名} → ${nameMatch.match} (${Math.round(nameMatch.confidence * 100)}%)`);
+            log.warn('機械操作者名マッチング信頼度が低い', {
+              confidence: Math.round(nameMatch.confidence * 100)
+            });
           }
         } else {
           // マッチが見つからない場合（信頼度0%）
@@ -181,7 +184,7 @@ export class DataCorrectionService {
           correctedRecord.confidence = 0;
           correctedRecord.matchType = 'no_match';
           correctedRecord.nameError = true;
-          console.log(`🔴 マッチなし: ${record.氏名} - エラーフラグ設定`);
+          log.warn('機械操作者名マッチング失敗 - エラーフラグ設定');
         }
       }
       

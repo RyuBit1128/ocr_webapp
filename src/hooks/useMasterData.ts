@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { MasterDataError } from '@/types';
+import { log } from '@/utils/logger';
 
 export interface MasterData {
   employees: string[];
@@ -19,7 +20,7 @@ export const useMasterData = () => {
       const data = await GoogleSheetsService.getMasterData();
       setMasterData(data);
     } catch (err) {
-      console.error('マスターデータの取得に失敗:', err);
+      log.error('マスターデータの取得に失敗:', err);
       if (err && typeof err === 'object' && 'errorType' in err) {
         // MasterDataErrorの場合
         setError(err as MasterDataError);

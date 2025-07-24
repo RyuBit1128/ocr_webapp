@@ -1,6 +1,7 @@
 import { OcrResult } from '@/types';
-import { OCR_PROMPT, OCR_CONFIG } from '@/prompts/ocrPrompt';
 import { EnvironmentValidator } from '@/utils/envConfig';
+import { OCR_PROMPT } from '@/prompts/ocrPrompt';
+import { log } from '@/utils/logger';
 
 /**
  * OpenAI Vision APIを使用したOCRサービス
@@ -124,8 +125,8 @@ export class OpenAIOcrService {
             ]
           }
         ],
-        max_tokens: OCR_CONFIG.max_tokens,
-        temperature: OCR_CONFIG.temperature,
+        max_tokens: 1000, // レスポンスのトークン数を制限
+        temperature: 0.1, // 低い温度で安定した結果を得る
       };
 
       onProgress?.(50, '文字認識を実行中...');
@@ -170,8 +171,8 @@ export class OpenAIOcrService {
           
           return JSON.parse(jsonString.trim());
         } catch (parseError) {
-          console.error('JSON解析エラー:', parseError);
-          console.error('レスポンス内容:', content);
+          log.error('JSON解析エラー', parseError);
+          log.debug('レスポンス内容長', content.length);
           throw new Error('OCR結果の解析に失敗しました。画像が不鮮明な可能性があります。');
         }
       };
@@ -187,87 +188,102 @@ export class OpenAIOcrService {
 
       // 使用量をログ出力
       if (data.usage) {
-        console.log('OpenAI API使用量:', {
+        log.production('OpenAI API使用量', {
           promptTokens: data.usage.prompt_tokens,
           completionTokens: data.usage.completion_tokens,
           totalTokens: data.usage.total_tokens,
         });
       }
 
-      // OCR結果の詳細ログ出力
-      console.log('========================');
-      console.log('🔍 OCR結果 (GPT-4.1 Vision)');
-      console.log('========================');
-      console.log('📋 ヘッダー情報:');
-      console.log(`  作業日: ${ocrResult.ヘッダー.作業日}`);
-      console.log(`  工場名: ${ocrResult.ヘッダー.工場名}`);
-      console.log(`  商品名: ${ocrResult.ヘッダー.商品名}`);
-      console.log(`  作業時間: ${ocrResult.ヘッダー.作業時間}`);
+      // OCR結果の詳細ログ出力（開発環境のみ）
+      log.success('OCR処理完了');
+      log.debug('ヘッダー情報解析完了', {
+        hasWorkDate: !!ocrResult.ヘッダー.作業日,
+        hasFactory: !!ocrResult.ヘッダー.工場名,
+        hasProduct: !!ocrResult.ヘッダー.商品名,
+        hasWorkTime: !!ocrResult.ヘッダー.作業時間
+      });
       
-      console.log('\n👥 包装作業記録:');
+      // 詳細なOCR結果は開発環境でのみ表示
+      log.dev('=== OCR結果詳細 ===');
+      log.dev(`作業日: ${ocrResult.ヘッダー.作業日}`);
+      log.dev(`工場名: ${ocrResult.ヘッダー.工場名}`);
+      log.dev(`商品名: ${ocrResult.ヘッダー.商品名}`);
+      log.dev(`作業時間: ${ocrResult.ヘッダー.作業時間}`);
+      
+      // 包装作業記録の統計情報のみ表示
+      log.debug('包装作業記録解析完了', {
+        count: ocrResult.包装作業記録?.length || 0
+      });
+      
+      // 詳細は開発環境でのみ表示
       if (ocrResult.包装作業記録 && ocrResult.包装作業記録.length > 0) {
         ocrResult.包装作業記録.forEach((record, index) => {
-          console.log(`  ${index + 1}. ${record.氏名}`);
-          console.log(`     開始時刻: ${record.開始時刻}`);
-          console.log(`     終了時刻: ${record.終了時刻}`);
-          console.log(`     休憩: 昼休み=${record.休憩.昼休み ? '有' : '無'}, 中休み=${record.休憩.中休み ? '有' : '無'}`);
-          console.log(`     生産数: ${record.生産数}`);
+          log.dev(`包装作業者${index + 1}: ${record.氏名}`);
+          log.dev(`  開始: ${record.開始時刻}, 終了: ${record.終了時刻}`);
+          log.dev(`  休憩: 昼=${record.休憩.昼休み ? '有' : '無'}, 中=${record.休憩.中休み ? '有' : '無'}`);
+          log.dev(`  生産数: ${record.生産数}`);
           if (record.時刻リスト && record.時刻リスト.length > 1) {
-            console.log(`     時刻リスト:`);
             record.時刻リスト.forEach((timeSlot, timeIndex) => {
-              console.log(`       ${timeIndex + 1}. ${timeSlot.開始時刻} - ${timeSlot.終了時刻}`);
+              log.dev(`  時刻${timeIndex + 1}: ${timeSlot.開始時刻} - ${timeSlot.終了時刻}`);
             });
           }
         });
-      } else {
-        console.log('  なし');
       }
       
-      console.log('\n⚙️ 機械操作記録:');
+      // 機械操作記録の統計情報のみ表示
+      log.debug('機械操作記録解析完了', {
+        count: ocrResult.機械操作記録?.length || 0
+      });
+      
+      // 詳細は開発環境でのみ表示
       if (ocrResult.機械操作記録 && ocrResult.機械操作記録.length > 0) {
         ocrResult.機械操作記録.forEach((record, index) => {
-          console.log(`  ${index + 1}. ${record.氏名}`);
-          console.log(`     開始時刻: ${record.開始時刻}`);
-          console.log(`     終了時刻: ${record.終了時刻}`);
-          console.log(`     休憩: 昼休み=${record.休憩.昼休み ? '有' : '無'}, 中休み=${record.休憩.中休み ? '有' : '無'}`);
-          console.log(`     生産数: ${record.生産数}`);
+          log.dev(`機械操作者${index + 1}: ${record.氏名}`);
+          log.dev(`  開始: ${record.開始時刻}, 終了: ${record.終了時刻}`);
+          log.dev(`  休憩: 昼=${record.休憩.昼休み ? '有' : '無'}, 中=${record.休憩.中休み ? '有' : '無'}`);
+          log.dev(`  生産数: ${record.生産数}`);
           if (record.時刻リスト && record.時刻リスト.length > 1) {
-            console.log(`     時刻リスト:`);
             record.時刻リスト.forEach((timeSlot, timeIndex) => {
-              console.log(`       ${timeIndex + 1}. ${timeSlot.開始時刻} - ${timeSlot.終了時刻}`);
+              log.dev(`  時刻${timeIndex + 1}: ${timeSlot.開始時刻} - ${timeSlot.終了時刻}`);
             });
           }
         });
-      } else {
-        console.log('  なし');
       }
 
-      console.log('\n📊 補正情報:');
-      // ヘッダーの補正情報
-      if ((ocrResult.ヘッダー as any).originalProductName) {
-        console.log(`  商品名: ${(ocrResult.ヘッダー as any).originalProductName} → ${ocrResult.ヘッダー.商品名} (${Math.round(((ocrResult.ヘッダー as any).productConfidence || 0) * 100)}%)`);
+      // 補正情報の統計のみ表示
+      const productCorrected = !!(ocrResult.ヘッダー as any).originalProductName;
+      const nameCorrectionCount = [
+        ...(ocrResult.包装作業記録 || []),
+        ...(ocrResult.機械操作記録 || [])
+      ].filter(record => record.originalName).length;
+      
+      log.debug('データ補正統計', {
+        productCorrected,
+        nameCorrectionCount
+      });
+      
+      // 詳細な補正情報は開発環境でのみ表示
+      if (productCorrected) {
+        log.dev(`商品名補正: ${(ocrResult.ヘッダー as any).originalProductName} → ${ocrResult.ヘッダー.商品名} (${Math.round(((ocrResult.ヘッダー as any).productConfidence || 0) * 100)}%)`);
       }
       
-      // 包装作業記録の補正情報
       (ocrResult.包装作業記録 || []).forEach((record, index) => {
         if (record.originalName) {
-          console.log(`  作業者${index + 1}: ${record.originalName} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
+          log.dev(`包装作業者${index + 1}補正: ${record.originalName} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
         }
       });
       
-      // 機械操作記録の補正情報
       (ocrResult.機械操作記録 || []).forEach((record, index) => {
         if (record.originalName) {
-          console.log(`  機械操作者${index + 1}: ${record.originalName} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
+          log.dev(`機械操作者${index + 1}補正: ${record.originalName} → ${record.氏名} (${Math.round((record.confidence || 0) * 100)}%)`);
         }
       });
-      
-      console.log('========================');
 
       return ocrResult;
 
     } catch (error) {
-      console.error('OCR処理エラー:', error);
+      log.error('OCR処理エラー', error);
       
       // エラータイプに応じたメッセージを返す
       if (error instanceof Error) {

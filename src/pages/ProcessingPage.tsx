@@ -1,23 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   LinearProgress,
+  CircularProgress,
+  Paper,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogContentText,
   DialogActions,
 } from '@mui/material';
-import { Search, Warning } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
-import { DataCorrectionService } from '@/services/dataCorrectionService';
 import { OpenAIOcrService } from '@/services/ocrService';
+import { DataCorrectionService } from '@/services/dataCorrectionService';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
+import { log } from '@/utils/logger';
 
 const ProcessingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,11 +69,11 @@ const ProcessingPage: React.FC = () => {
         setProgress(5);
         try {
           await GoogleSheetsService.checkAuthentication();
-        } catch (authError) {
-          // 認証エラーの場合は自動的にリダイレクトされるため、ここには通常到達しない
-          console.log('🔄 認証チェックでリダイレクトが発生しました');
-          return;
-        }
+                  } catch (authError) {
+            // 認証エラーの場合は自動的にリダイレクトされるため、ここには通常到達しない
+            log.debug('認証チェックでリダイレクトが発生');
+            return;
+          }
 
         // OpenAI Vision APIでOCR処理
         setStatusMessage('画像を分析中...');
@@ -87,24 +86,24 @@ const ProcessingPage: React.FC = () => {
         const correctedResult = await DataCorrectionService.correctOcrResult(ocrResult);
         
         // デフォルトの作業日を今日の日付に設定
-        if (!correctedResult.ヘッダー.作業日 || correctedResult.ヘッダー.作業日 === 'undefined') {
-          const today = new Date();
-          correctedResult.ヘッダー.作業日 = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
-          console.log('作業日をデフォルト値に設定:', correctedResult.ヘッダー.作業日);
-        }
+                  if (!correctedResult.ヘッダー.作業日 || correctedResult.ヘッダー.作業日 === 'undefined') {
+            const today = new Date();
+            correctedResult.ヘッダー.作業日 = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+            log.debug('作業日をデフォルト値に設定', correctedResult.ヘッダー.作業日);
+          }
         
         setProgress(100);
         setStatusMessage('処理完了！');
         setOcrResult(correctedResult);
-        setCurrentStep(3);
-        
-        console.log('✅ OCR処理完了 - 確認画面に移動します');
-        setTimeout(() => {
-          navigate('/confirmation');
-        }, 1000);
+                  setCurrentStep(3);
+          
+          log.process('OCR処理完了 - 確認画面に移動');
+          setTimeout(() => {
+            navigate('/confirmation');
+          }, 1000);
         
       } catch (error) {
-        console.error('OCR処理エラー:', error);
+        log.error('OCR処理エラー:', error);
         
         let errorMessage = '文字認識に失敗しました。もう一度撮影してください。';
         
@@ -116,13 +115,13 @@ const ProcessingPage: React.FC = () => {
           }
         }
         
-        setError({
-          type: 'OCR_ERROR',
-          message: errorMessage,
-          details: error,
-        });
-        console.log('エラーダイアログを表示します');
-        setErrorDialogOpen(true);
+                  setError({
+            type: 'OCR_ERROR',
+            message: errorMessage,
+            details: error,
+          });
+          log.debug('エラーダイアログを表示');
+          setErrorDialogOpen(true);
       } finally {
         setIsProcessing(false);
       }
@@ -139,10 +138,10 @@ const ProcessingPage: React.FC = () => {
   }, [error]);
 
 
-  const handleErrorConfirm = () => {
-    console.log('確認ボタンが押されました');
-    // ローカル状態をリセット
-    setErrorDialogOpen(false);
+      const handleErrorConfirm = () => {
+      log.debug('確認ボタンが押された');
+      // ローカル状態をリセット
+      setErrorDialogOpen(false);
     setHasProcessed(false);
     setProgress(0);
     setStatusMessage('画像を分析中...');
@@ -159,35 +158,33 @@ const ProcessingPage: React.FC = () => {
           🔍 文字を読み取り中
         </Typography>
 
-        <Card sx={{ mb: 3 }}>
-          <CardContent sx={{ py: 4 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-              <Search sx={{ fontSize: 60, color: 'primary.main' }} />
-            </Box>
+        <Paper sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+            <CircularProgress sx={{ fontSize: 60, color: 'primary.main' }} />
+          </Box>
 
-            <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-              処理中にエラーが発生しました
-            </Typography>
+          <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+            処理中にエラーが発生しました
+          </Typography>
 
-            <LinearProgress
-              variant="determinate"
-              value={100}
-              color="error"
-              sx={{
-                height: 8,
+          <LinearProgress
+            variant="determinate"
+            value={100}
+            color="error"
+            sx={{
+              height: 8,
+              borderRadius: 4,
+              mb: 2,
+              '& .MuiLinearProgress-bar': {
                 borderRadius: 4,
-                mb: 2,
-                '& .MuiLinearProgress-bar': {
-                  borderRadius: 4,
-                },
-              }}
-            />
+              },
+            }}
+          />
 
-            <Typography variant="body2" color="text.secondary">
-              エラーが発生しました
-            </Typography>
-          </CardContent>
-        </Card>
+          <Typography variant="body2" color="text.secondary">
+            エラーが発生しました
+          </Typography>
+        </Paper>
 
         {/* エラーダイアログ */}
         <Dialog
@@ -200,13 +197,13 @@ const ProcessingPage: React.FC = () => {
           disableEscapeKeyDown
         >
           <DialogTitle id="error-dialog-title" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Warning color="error" />
+            <CircularProgress color="error" />
             読み取りエラー
           </DialogTitle>
           <DialogContent>
-            <DialogContentText id="error-dialog-description" sx={{ fontSize: '16px' }}>
+            <Typography id="error-dialog-description" sx={{ fontSize: '16px' }}>
               {error.message}
-            </DialogContentText>
+            </Typography>
           </DialogContent>
           <DialogActions>
             <Button 
@@ -229,45 +226,44 @@ const ProcessingPage: React.FC = () => {
         🔍 文字を読み取り中
       </Typography>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ py: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-            <Search sx={{ fontSize: 60, color: 'primary.main' }} />
-          </Box>
+      <Paper sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <CircularProgress sx={{ fontSize: 60, color: 'primary.main' }} />
+        </Box>
 
-          <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-            {statusMessage}
-          </Typography>
+        <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+          {statusMessage}
+        </Typography>
 
-          <LinearProgress
-            variant="determinate"
-            value={progress}
-            sx={{
-              height: 8,
+        <LinearProgress
+          variant="determinate"
+          value={progress}
+          sx={{
+            height: 8,
+            borderRadius: 4,
+            mb: 2,
+            '& .MuiLinearProgress-bar': {
               borderRadius: 4,
-              mb: 2,
-              '& .MuiLinearProgress-bar': {
-                borderRadius: 4,
-              },
-            }}
-          />
+            },
+          }}
+        />
 
-          <Typography variant="body2" color="text.secondary">
-            {progress}% 完了
-          </Typography>
-        </CardContent>
-      </Card>
+        <Typography variant="body2" color="text.secondary">
+          {progress}% 完了
+        </Typography>
+      </Paper>
 
-      <Card>
-        <CardContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            ⏳ しばらくお待ちください...
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            手書きの文字を認識し、データを整理しています。
-          </Typography>
-        </CardContent>
-      </Card>
+      <Paper>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <CircularProgress size={24} />
+        </Box>
+        <Typography variant="body1">
+          ⏳ しばらくお待ちください...
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          手書きの文字を認識し、データを整理しています。
+        </Typography>
+      </Paper>
     </Box>
   );
 };

@@ -1,5 +1,6 @@
-import { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Box, Card, CardContent, Typography, Button, Alert } from '@mui/material';
+import { log } from '@/utils/logger';
 import { Refresh, BugReport } from '@mui/icons-material';
 
 interface Props {
@@ -31,7 +32,7 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    log.error('ErrorBoundary caught an error', { error, errorInfo });
     this.setState({
       error,
       errorInfo,

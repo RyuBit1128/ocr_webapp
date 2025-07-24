@@ -1,6 +1,7 @@
 import { OcrResult, MasterDataError, MasterDataErrorType } from '@/types';
 import { EnvironmentValidator } from '@/utils/envConfig';
 import { TokenExpiryService } from './tokenExpiryService';
+import { log } from '@/utils/logger';
 
 /**
  * Google Sheets API を使用したデータ管理サービス
@@ -192,7 +193,7 @@ export class GoogleSheetsService {
         // URL からハッシュを削除
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
         
-        console.log('✅ 認証成功！トークンを取得しました');
+        log.success('認証成功！トークンを取得しました');
         
         // 認証成功後にトークン監視を開始/リセット
         TokenExpiryService.resetMonitoring();
@@ -224,14 +225,14 @@ export class GoogleSheetsService {
       );
       
       if (!response.ok) {
-        console.log('🔄 トークンが無効のため localStorage から削除');
+        log.debug('トークンが無効のため localStorage から削除');
         this.clearStoredToken();
         return false;
       }
       
       return true;
     } catch (error) {
-      console.warn('⚠️ トークン検証エラー:', error);
+      log.warn('トークン検証エラー', error);
       this.clearStoredToken();
       return false;
     }
@@ -311,17 +312,17 @@ export class GoogleSheetsService {
       
       // 完全一致を確認
       if (allSheetNames.includes(expectedSheetName)) {
-        console.log(`✅ 個人シートが見つかりました: ${expectedSheetName}`);
+        log.debug('個人シートが見つかりました', expectedSheetName);
         return expectedSheetName;
       }
 
-      console.log(`❌ 個人シートが見つかりません: ${expectedSheetName}`);
-      console.log('利用可能なシート:', allSheetNames.filter(name => name.includes(employeeName)));
+      log.debug('個人シートが見つかりません', expectedSheetName);
+      log.debug('利用可能なシート数', allSheetNames.filter(name => name.includes(employeeName)).length);
       
       // 個人シートが見つからない場合のエラーメッセージ
       throw new Error(`個人シートがありません。個人シートを作成してください。\n\n必要なシート名: ${expectedSheetName}\n\n作成手順:\n1. Googleスプレッドシートで新しいシートを追加\n2. シート名を「${expectedSheetName}」に設定\n3. 再度お試しください`);
     } catch (error) {
-      console.error('個人シート検索エラー:', error);
+      log.error('個人シート検索エラー', error);
       throw error;
     }
   }
@@ -354,14 +355,14 @@ export class GoogleSheetsService {
     employees: string[];
     products: string[];
   }> {
-    console.log('🔄 マスターデータ取得開始');
+    log.process('マスターデータ取得開始');
     await this.ensureAuthenticated();
-    console.log('✅ 認証確認完了');
+    log.debug('認証確認完了');
 
     try {
       // 管理シートからA列とB列を取得（ヘッダー行を除外するため2行目から）
       const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/管理!A2:B?key=${this.getConfig().googleApiKey}`;
-      console.log('📡 API呼び出し:', apiUrl);
+      log.api('マスターデータAPI呼び出し開始');
       
       const masterDataResponse = await fetch(apiUrl, {
         headers: {
@@ -369,15 +370,14 @@ export class GoogleSheetsService {
         },
       });
 
-      console.log('📊 API レスポンス:', {
+      log.debug('API レスポンス状態', {
         status: masterDataResponse.status,
-        statusText: masterDataResponse.statusText,
         ok: masterDataResponse.ok
       });
 
       if (!masterDataResponse.ok) {
         const errorText = await masterDataResponse.text();
-        console.error('❌ API エラーレスポンス:', errorText);
+        log.error('API エラーレスポンス', { status: masterDataResponse.status, statusText: masterDataResponse.statusText });
         throw new Error(`マスターデータの取得に失敗しました: ${masterDataResponse.status} ${masterDataResponse.statusText}`);
       }
 
@@ -404,21 +404,20 @@ export class GoogleSheetsService {
 
       const products = Array.from(productSet);
 
-      console.log('マスターデータを取得しました:', {
+      log.success('マスターデータを取得しました', {
         employees: employees.length,
         products: products.length,
       });
-      console.log('👥 マスターデータ従業員一覧:', employees);
-      console.log('📦 マスターデータ商品一覧:', products);
+      log.debug('従業員データ件数', employees.length);
+      log.debug('商品データ件数', products.length);
 
       return { employees, products };
 
     } catch (error) {
-      console.error('🚨 マスターデータ取得エラー:', error);
-      console.error('🚨 エラー詳細:', {
+      log.error('マスターデータ取得エラー', error);
+      log.debug('エラー詳細', {
         message: error instanceof Error ? error.message : 'Unknown error',
-        type: typeof error,
-        stack: error instanceof Error ? error.stack : undefined
+        type: typeof error
       });
 
       // エラーの種類を判定して適切なMasterDataErrorを投げる
@@ -595,50 +594,47 @@ export class GoogleSheetsService {
         ...(ocrResult.機械操作記録 || []).map(record => record.氏名),
       ].filter(name => name && name.trim());
 
-      console.log('========================');
-      console.log('💾 Google Sheetsへの保存開始');
-      console.log('========================');
-      console.log(`📅 作業日: ${ocrResult.ヘッダー.作業日}`);
-      console.log(`🏭 工場名: ${ocrResult.ヘッダー.工場名}`);
-      console.log(`📦 商品名: ${ocrResult.ヘッダー.商品名}`);
-      console.log(`👥 対象作業者: ${allWorkers.join(', ')}`);
+      log.process('Google Sheetsへの保存開始');
+      log.debug('作業日', ocrResult.ヘッダー.作業日);
+      log.debug('工場名', ocrResult.ヘッダー.工場名);
+      log.debug('商品名', ocrResult.ヘッダー.商品名);
+      log.debug('対象作業者数', allWorkers.length);
 
       // 失敗した作業者を追跡
       const failedWorkers: string[] = [];
 
       // 各作業者の個人シートに保存（順次実行でAPI制限を回避）
-      console.log('⏳ 作業者データを順次保存します（API制限回避のため）...');
+      log.process('作業者データを順次保存します（API制限回避のため）');
       
       for (let i = 0; i < allWorkers.length; i++) {
         const workerName = allWorkers[i];
         try {
-          console.log(`🔄 ${i + 1}/${allWorkers.length}: ${workerName} のデータを保存中...`);
+          log.debug(`${i + 1}/${allWorkers.length}: 作業者データ保存中`);
           await this.saveWorkerData(workerName, ocrResult);
           
           // API制限回避のため少し待機（複数作業者の場合）
           if (i < allWorkers.length - 1 && allWorkers.length > 1) {
-            console.log('⏱️ API制限回避のため2秒待機...');
+            log.debug('API制限回避のため2秒待機');
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
           
         } catch (error) {
           if (error instanceof Error && error.message.includes('個人シートがありません')) {
             failedWorkers.push(workerName);
-            console.log(`⚠️ ${workerName}: 個人シートなしのためスキップ`);
+            log.warn('個人シートなしのためスキップ', { worker: i + 1 });
           } else {
-            console.error(`❌ ${workerName}: 保存エラー`, error);
+            log.error('保存エラー', { worker: i + 1, error });
             throw error;
           }
         }
       }
       
       if (failedWorkers.length > 0) {
-        console.log(`⚠️ 以下の作業者の保存に失敗しました: ${failedWorkers.join(', ')}`);
+        log.warn('一部作業者の保存に失敗', { count: failedWorkers.length });
         return { failedWorkers };
       }
       
-      console.log('✅ 全ての個人シートへの保存が完了しました');
-      console.log('========================');
+      log.success('全ての個人シートへの保存が完了しました');
 
     } catch (error) {
       console.error('❌ 個人シート保存エラー:', error);
@@ -666,35 +662,35 @@ export class GoogleSheetsService {
   private static async saveWorkerData(workerName: string, ocrResult: OcrResult): Promise<void> {
     if (!workerName || !workerName.trim()) return;
 
-    console.log(`\n👤 作業者データ保存開始: ${workerName}`);
-    console.log(`📅 作業日: ${ocrResult.ヘッダー.作業日}`);
+    log.debug('作業者データ保存開始');
+    log.debug('作業日', ocrResult.ヘッダー.作業日);
 
     // 作業日から適切な個人シートを検索
     const personalSheetName = await this.findPersonalSheet(workerName, ocrResult.ヘッダー.作業日!);
     
     if (!personalSheetName) {
-      console.log(`❌ 個人シートが見つかりません: ${workerName}`);
+      log.error('個人シートが見つかりません');
       throw new Error(`${workerName}の個人シートが見つかりません。シート名: {従業員名}_{YYYY}年{MM}月 で作成してください。`);
     }
     
-    console.log(`📋 対象シート: ${personalSheetName}`);
+    log.debug('対象シート確定');
     
     // 作業者の包装作業記録を検索
     const packagingRecord = ocrResult.包装作業記録.find(record => record.氏名 === workerName);
     // 作業者の機械操作記録を検索
     const machineRecord = ocrResult.機械操作記録.find(record => record.氏名 === workerName);
 
-    console.log(`📦 包装作業記録: ${packagingRecord ? 'あり' : 'なし'}`);
-    console.log(`⚙️ 機械操作記録: ${machineRecord ? 'あり' : 'なし'}`);
+    log.debug('包装作業記録', packagingRecord ? 'あり' : 'なし');
+    log.debug('機械操作記録', machineRecord ? 'あり' : 'なし');
 
     if (!packagingRecord && !machineRecord) {
-      console.log(`⚠️ ${workerName}のデータがないためスキップ`);
+      log.debug('データがないためスキップ');
       return;
     }
 
     // スプレッドシート構造に従ってデータを保存
     await this.saveToPersonalSheetStructure(personalSheetName, ocrResult, packagingRecord, machineRecord);
-    console.log(`✅ ${workerName}のデータ保存完了`);
+    log.debug('作業者データ保存完了');
   }
 
 
@@ -710,12 +706,12 @@ export class GoogleSheetsService {
     try {
       // 作業日を正規化（M/D形式）
       const workDate = this.normalizeDate(ocrResult.ヘッダー.作業日!);
-      console.log(`📋 シート「${sheetName}」への保存処理開始`);
-      console.log(`📅 正規化された作業日: ${workDate}`);
+      log.debug('シートへの保存処理開始');
+      log.debug('正規化された作業日', workDate);
       
       // 既存データの確認（A列の日付で検索）
       const existingRowIndex = await this.findExistingRowByDate(sheetName, workDate);
-      console.log(`🔍 既存データ検索結果: ${existingRowIndex > 0 ? `行${existingRowIndex}に存在` : '新規データ'}`);
+      log.debug('既存データ検索結果', existingRowIndex > 0 ? '既存行発見' : '新規データ');
       
       // データ作成と保存
       let rowData: (string | number)[];
@@ -724,18 +720,18 @@ export class GoogleSheetsService {
         // 既存行の場合：既存データと新規データを統合
         rowData = await this.createMergedRowData(sheetName, existingRowIndex, ocrResult, packagingRecord, machineRecord, workDate);
         await this.updatePersonalSheetRow(sheetName, existingRowIndex, rowData);
-        console.log(`🔄 ${sheetName} の行${existingRowIndex}を更新しました (${workDate})`);
+        log.debug('既存行を更新');
       } else {
         // 新規行の場合：新規データを作成
         rowData = this.createNewRowData(ocrResult, packagingRecord, machineRecord, workDate);
         await this.appendPersonalSheetRow(sheetName, rowData);
-        console.log(`➕ ${sheetName} に新規行を追加しました (${workDate})`);
+        log.debug('新規行を追加');
       }
       
-      console.log(`✅ シート「${sheetName}」への保存完了`);
+      log.debug('シートへの保存完了');
       
     } catch (error) {
-      console.error(`❌ シート「${sheetName}」への保存エラー:`, error);
+      log.error('シートへの保存エラー', error);
       throw error;
     }
   }
@@ -801,7 +797,7 @@ export class GoogleSheetsService {
    */
   private static async findExistingRowByDate(sheetName: string, workDate: string): Promise<number> {
     try {
-      console.log(`🔍 既存行検索開始: シート "${sheetName}", 対象日付 "${workDate}"`);
+      log.debug('既存行検索開始');
       
       const response = await this.fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}/values/${sheetName}!A:A?key=${this.getConfig().googleApiKey}`,
@@ -813,13 +809,13 @@ export class GoogleSheetsService {
       );
 
       if (!response.ok) {
-        console.log(`❌ A列取得API失敗: ${response.status} ${response.statusText}`);
+        log.error('A列取得API失敗', { status: response.status });
         return -1;
       }
 
       const data = await response.json();
       const values = data.values || [];
-      console.log(`📊 A列データ取得完了: ${values.length}行`);
+      log.debug('A列データ取得完了', { rows: values.length });
       
       // デバッグログは性能に影響するため削除（必要時のみ有効化）
       // values.forEach((row: any[], index: number) => {
@@ -833,15 +829,15 @@ export class GoogleSheetsService {
         const cellValue = values[i][0];
         if (cellValue === workDate) {
           const rowNumber = i + 1;
-          console.log(`✅ 完全一致で既存行発見: 行${rowNumber} (A${rowNumber} = "${cellValue}")`);
+          log.debug('完全一致で既存行発見', { row: rowNumber });
           return rowNumber;
         }
       }
       
       // 完全一致しない場合、正規化して再検索
-      console.log(`🔄 完全一致なし。正規化して再検索...`);
+      log.debug('完全一致なし。正規化して再検索');
       const normalizedWorkDate = this.normalizeDate(workDate);
-      console.log(`🎯 検索対象日付も正規化: "${workDate}" → "${normalizedWorkDate}"`);
+      log.debug('検索対象日付も正規化', { from: workDate, to: normalizedWorkDate });
       
       for (let i = 0; i < values.length; i++) {
         const cellValue = values[i][0];
@@ -851,19 +847,17 @@ export class GoogleSheetsService {
           // 両方を正規化して比較
           if (normalizedCellValue === normalizedWorkDate) {
             const rowNumber = i + 1;
-            console.log(`✅ 正規化後一致で既存行発見: 行${rowNumber}`);
-            console.log(`  シート値: "${cellValue}" → "${normalizedCellValue}"`);
-            console.log(`  検索値: "${workDate}" → "${normalizedWorkDate}"`);
+            log.debug('正規化後一致で既存行発見', { row: rowNumber });
             return rowNumber;
           }
         }
       }
       
-      console.log(`❌ 対象日付 "${workDate}" の既存行は見つかりませんでした`);
+      log.debug('対象日付の既存行は見つかりませんでした');
       return -1;
       
     } catch (error) {
-      console.error('❌ 既存行検索エラー:', error);
+      log.error('既存行検索エラー', error);
       return -1;
     }
   }
@@ -1317,11 +1311,11 @@ export class GoogleSheetsService {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error(`❌ 行更新API失敗: ${response.status} ${response.statusText}`, errorData);
+      log.error('行更新API失敗', { status: response.status, statusText: response.statusText });
       throw new Error(`行更新エラー: ${errorData.error?.message || response.statusText}`);
     }
     
-    console.log(`✅ 行更新API成功: ${sheetName} 行${rowIndex}`);
+    log.debug('行更新API成功');
   }
 
   /**
@@ -1414,11 +1408,11 @@ export class GoogleSheetsService {
 
     if (!updateResponse.ok) {
       const errorData = await updateResponse.json().catch(() => ({}));
-      console.error(`❌ 行追加API失敗: ${updateResponse.status} ${updateResponse.statusText}`, errorData);
+      log.error('行追加API失敗', { status: updateResponse.status, statusText: updateResponse.statusText });
       throw new Error(`行追加エラー: ${errorData.error?.message || updateResponse.statusText}`);
     }
     
-    console.log(`✅ 行追加API成功: ${sheetName} - 行${nextRow}に追加`);
+    log.debug('行追加API成功');
   }
 
   /**
@@ -1456,14 +1450,14 @@ export class GoogleSheetsService {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔄 API呼び出し試行 ${attempt}/${maxRetries}: ${url}`);
+        log.debug(`API呼び出し試行 ${attempt}/${maxRetries}`);
         const response = await fetch(url, options);
         
         // 429 (Too Many Requests) の場合は待機してリトライ
         if (response.status === 429) {
           if (attempt < maxRetries) {
             const waitTime = delay * Math.pow(2, attempt - 1); // 指数バックオフ
-            console.log(`⏱️ API制限のため ${waitTime}ms 待機してリトライ...`);
+            log.debug(`API制限のため ${waitTime}ms 待機してリトライ`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
             continue;
           }
@@ -1472,7 +1466,7 @@ export class GoogleSheetsService {
         // 5xx系エラーの場合もリトライ
         if (response.status >= 500 && response.status < 600) {
           if (attempt < maxRetries) {
-            console.log(`⚠️ サーバーエラー(${response.status})のため ${delay}ms 待機してリトライ...`);
+            log.debug(`サーバーエラー(${response.status})のため ${delay}ms 待機してリトライ`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
@@ -1484,7 +1478,7 @@ export class GoogleSheetsService {
         lastError = error instanceof Error ? error : new Error('Unknown fetch error');
         
         if (attempt < maxRetries) {
-          console.log(`⚠️ ネットワークエラーのため ${delay}ms 待機してリトライ...`);
+          log.debug(`ネットワークエラーのため ${delay}ms 待機してリトライ`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }

@@ -1,43 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
+  Typography,
+  TextField,
+  Button,
   Card,
   CardContent,
-  Typography,
-  Button,
-  TextField,
-  IconButton,
-  Alert,
-  Stack,
-  Chip,
   Autocomplete,
+  Chip,
+  Stack,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogContentText,
   DialogActions,
+  Alert,
+  AlertTitle,
 } from '@mui/material';
-import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import dayjs, { Dayjs } from 'dayjs';
-import 'dayjs/locale/ja';
-import {
-  Save,
-  ArrowBack,
-  Delete,
-  Add,
-  PersonAdd,
-  Edit,
-  Warning,
-  Check,
-  HelpOutline,
-} from '@mui/icons-material';
-import { CircularProgress } from '@mui/material';
+import { Check, Edit, PlayArrow, ErrorOutline, Refresh, CloudOff, Lock, Wifi } from '@mui/icons-material';
+import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus, MasterDataError } from '@/types';
 import { useAppStore } from '@/stores/appStore';
-import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus } from '@/types';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { useMasterData } from '@/hooks/useMasterData';
+import { log } from '@/utils/logger';
 
 const ConfirmationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -165,15 +150,15 @@ const ConfirmationPage: React.FC = () => {
     };
     
     // デバッグ用：nameErrorの確認
-    console.log('🔍 読み取り結果確認画面でのnameError確認:');
+    log.dev('読み取り結果確認画面でのnameError確認');
     initializedData.包装作業記録?.forEach((record: any, index: number) => {
       if (record.nameError) {
-        console.log(`  包装作業記録[${index}]: ${record.氏名} - nameError: ${record.nameError}`);
+        log.dev(`包装作業記録[${index}]: nameError確認`);
       }
     });
     initializedData.機械操作記録?.forEach((record: any, index: number) => {
       if (record.nameError) {
-        console.log(`  機械操作記録[${index}]: ${record.氏名} - nameError: ${record.nameError}`);
+        log.dev(`機械操作記録[${index}]: nameError確認`);
       }
     });
     

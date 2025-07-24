@@ -2,6 +2,8 @@
  * 環境変数設定と検証
  */
 
+import { log } from './logger';
+
 interface EnvConfig {
   openaiApiKey: string;
   googleClientId: string;
@@ -31,10 +33,12 @@ class EnvironmentValidator {
       isDev: import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.DEV === true,
     };
 
-    console.log('環境設定を読み込みました:', {
-      ...config,
-      openaiApiKey: config.openaiApiKey.substring(0, 8) + '...',
-      googleApiKey: config.googleApiKey.substring(0, 8) + '...',
+    log.debug('環境設定を読み込み完了', {
+      hasOpenaiKey: !!config.openaiApiKey,
+      hasGoogleClientId: !!config.googleClientId,
+      hasGoogleApiKey: !!config.googleApiKey,
+      hasSpreadsheetId: !!config.spreadsheetId,
+      isDev: config.isDev
     });
 
     return config;
