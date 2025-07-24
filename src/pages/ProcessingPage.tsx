@@ -6,16 +6,11 @@ import {
   LinearProgress,
   Paper,
   CircularProgress,
-  Alert,
-  AlertTitle,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
 } from '@mui/material';
 import { useAppStore } from '@/stores/appStore';
 import { OpenAIOcrService } from '@/services/ocrService';
@@ -31,7 +26,6 @@ const ProcessingPage: React.FC = () => {
     setCurrentStep,
     error,
     setError,
-    isProcessing,
     setIsProcessing,
   } = useAppStore();
 
