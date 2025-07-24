@@ -18,6 +18,7 @@ import {
   Alert,
   IconButton,
   CircularProgress,
+  Grow,
 } from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -74,6 +75,10 @@ const ConfirmationPage: React.FC = () => {
   
   // 自動的に開くドロップダウンの管理
   const [autoOpenDropdowns, setAutoOpenDropdowns] = useState<Set<string>>(new Set());
+  
+  // 新規追加アニメーション用の状態
+  const [newlyAddedPackaging, setNewlyAddedPackaging] = useState<Set<number>>(new Set());
+  const [newlyAddedMachine, setNewlyAddedMachine] = useState<Set<number>>(new Set());
 
   // 重複検出関数
   const findDuplicates = (names: string[]): string[] => {
@@ -469,6 +474,12 @@ const ConfirmationPage: React.FC = () => {
       包装作業記録: [newRecord, ...editedData.包装作業記録],
     });
     setHasChanges(true);
+    
+    // 新規追加のアニメーション用
+    setNewlyAddedPackaging(new Set([0]));
+    setTimeout(() => {
+      setNewlyAddedPackaging(new Set());
+    }, 1000);
   };
 
   // 包装作業記録の指定位置への追加
@@ -503,6 +514,12 @@ const ConfirmationPage: React.FC = () => {
       包装作業記録: newRecords,
     });
     setHasChanges(true);
+    
+    // 新規追加のアニメーション用
+    setNewlyAddedPackaging(new Set([position]));
+    setTimeout(() => {
+      setNewlyAddedPackaging(new Set());
+    }, 1000);
   };
 
   // 機械操作記録の更新
@@ -623,6 +640,12 @@ const ConfirmationPage: React.FC = () => {
       機械操作記録: [newRecord, ...editedData.機械操作記録],
     });
     setHasChanges(true);
+    
+    // 新規追加のアニメーション用
+    setNewlyAddedMachine(new Set([0]));
+    setTimeout(() => {
+      setNewlyAddedMachine(new Set());
+    }, 1000);
   };
 
   // 機械操作記録の指定位置への追加
@@ -657,6 +680,12 @@ const ConfirmationPage: React.FC = () => {
       機械操作記録: newRecords,
     });
     setHasChanges(true);
+    
+    // 新規追加のアニメーション用
+    setNewlyAddedMachine(new Set([position]));
+    setTimeout(() => {
+      setNewlyAddedMachine(new Set());
+    }, 1000);
   };
 
   // 休憩情報の更新
@@ -1151,17 +1180,29 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 )}
                 
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: index % 2 === 0 ? 'background.default' : 'grey.50',
-                    borderTop: index > 0 ? '2px solid' : 'none',
-                    borderTopColor: 'primary.main',
-                  }}
+                <Grow 
+                  in={true} 
+                  timeout={newlyAddedPackaging.has(index) ? 600 : 0}
+                  style={{ transformOrigin: '0 0 0' }}
                 >
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: newlyAddedPackaging.has(index) ? 'primary.main' : 'divider',
+                      borderWidth: newlyAddedPackaging.has(index) ? '2px' : '1px',
+                      bgcolor: newlyAddedPackaging.has(index) 
+                        ? 'primary.50' 
+                        : (index % 2 === 0 ? 'background.default' : 'grey.50'),
+                      borderTop: index > 0 ? '2px solid' : 'none',
+                      borderTopColor: 'primary.main',
+                      transition: 'all 0.3s ease-in-out',
+                      boxShadow: newlyAddedPackaging.has(index) 
+                        ? '0 4px 20px rgba(25, 118, 210, 0.25)' 
+                        : 'none',
+                    }}
+                  >
                 {/* 1行目：氏名とOK/確認ボタンを横並び */}
                 <Box sx={{ mb: 1 }}>
                   <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
@@ -1477,6 +1518,7 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 </Box>
               </Box>
+              </Grow>
               </React.Fragment>
             ))}
             
@@ -1555,17 +1597,29 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 )}
                 
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: index % 2 === 0 ? 'background.default' : 'grey.50',
-                    borderTop: index > 0 ? '2px solid' : 'none',
-                    borderTopColor: 'primary.main',
-                  }}
+                <Grow 
+                  in={true} 
+                  timeout={newlyAddedMachine.has(index) ? 600 : 0}
+                  style={{ transformOrigin: '0 0 0' }}
                 >
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: newlyAddedMachine.has(index) ? 'primary.main' : 'divider',
+                      borderWidth: newlyAddedMachine.has(index) ? '2px' : '1px',
+                      bgcolor: newlyAddedMachine.has(index) 
+                        ? 'primary.50' 
+                        : (index % 2 === 0 ? 'background.default' : 'grey.50'),
+                      borderTop: index > 0 ? '2px solid' : 'none',
+                      borderTopColor: 'primary.main',
+                      transition: 'all 0.3s ease-in-out',
+                      boxShadow: newlyAddedMachine.has(index) 
+                        ? '0 4px 20px rgba(25, 118, 210, 0.25)' 
+                        : 'none',
+                    }}
+                  >
                 {/* 1行目：氏名とOK/確認ボタンを横並び */}
                 <Box sx={{ mb: 1 }}>
                   <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
@@ -1881,6 +1935,7 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 </Box>
               </Box>
+              </Grow>
               </React.Fragment>
             ))}
             
