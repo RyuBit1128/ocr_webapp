@@ -355,7 +355,14 @@ export class GoogleSheetsService {
     employees: string[];
     products: string[];
   }> {
-    log.process('マスターデータ取得開始');
+    // キャッシュから取得を試行
+    const cachedData = await import('./masterDataCache').then(m => m.MasterDataCache.getCachedData());
+    if (cachedData) {
+      log.debug('マスターデータをキャッシュから取得');
+      return cachedData;
+    }
+
+    log.process('マスターデータ取得開始（API経由）');
     await this.ensureAuthenticated();
     log.debug('認証確認完了');
 
@@ -403,6 +410,12 @@ export class GoogleSheetsService {
 
       const products = Array.from(productSet);
 
+      const result = { employees, products };
+
+      // キャッシュに保存
+      const { MasterDataCache } = await import('./masterDataCache');
+      MasterDataCache.setCachedData(result);
+
       log.success('マスターデータを取得しました', {
         employees: employees.length,
         products: products.length,
@@ -410,7 +423,7 @@ export class GoogleSheetsService {
       log.debug('従業員データ件数', employees.length);
       log.debug('商品データ件数', products.length);
 
-      return { employees, products };
+      return result;
 
     } catch (error) {
       log.error('マスターデータ取得エラー', error);
@@ -602,29 +615,43 @@ export class GoogleSheetsService {
       // 失敗した作業者を追跡
       const failedWorkers: string[] = [];
 
-      // 各作業者の個人シートに保存（順次実行でAPI制限を回避）
-      log.process('作業者データを順次保存します（API制限回避のため）');
+      // 各作業者の個人シートに並列保存（高速化）
+      log.process('作業者データを並列保存します');
       
-      for (let i = 0; i < allWorkers.length; i++) {
-        const workerName = allWorkers[i];
+      // 全作業者を並列で処理
+      const savePromises = allWorkers.map(async (workerName, index) => {
         try {
-          log.debug(`${i + 1}/${allWorkers.length}: 作業者データ保存中`);
+          log.debug(`${index + 1}/${allWorkers.length}: 作業者データ保存中`);
           await this.saveWorkerData(workerName, ocrResult);
-          
-          // API制限回避のため少し待機（複数作業者の場合）
-          if (i < allWorkers.length - 1 && allWorkers.length > 1) {
-            log.debug('API制限回避のため2秒待機');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-          
+          return { success: true, workerName };
         } catch (error) {
           if (error instanceof Error && error.message.includes('個人シートがありません')) {
-            failedWorkers.push(workerName);
-            log.warn('個人シートなしのためスキップ', { worker: i + 1 });
+            log.warn('個人シートなしのためスキップ', { worker: index + 1 });
+            return { success: false, workerName, reason: 'no_sheet' };
           } else {
-            log.error('保存エラー', { worker: i + 1, error });
-            throw error;
+            log.error('保存エラー', { worker: index + 1, error });
+            return { success: false, workerName, error };
           }
+        }
+      });
+      
+      // 全ての保存処理を並列実行
+      const results = await Promise.allSettled(savePromises);
+      
+      // 結果を処理
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          const saveResult = result.value;
+          if (!saveResult.success) {
+            if (saveResult.reason === 'no_sheet') {
+              failedWorkers.push(saveResult.workerName);
+            } else if (saveResult.error) {
+              throw saveResult.error;
+            }
+          }
+        } else {
+          log.error('保存処理で予期しないエラー', result.reason);
+          throw result.reason;
         }
       }
       

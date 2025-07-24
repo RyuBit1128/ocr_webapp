@@ -64,20 +64,25 @@ export class OpenAIOcrService {
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
-        // JPEG品質を調整してファイルサイズを制限
-        const compressWithQuality = (currentQuality: number): string => {
-          const data = canvas.toDataURL('image/jpeg', currentQuality);
-          const maxSize = maxSizeKB * 1024 * 4/3;
-          
-          if (data.length <= maxSize || currentQuality <= 0.3) {
-            return data;
-          }
-          
-          return compressWithQuality(currentQuality - 0.1);
+        // JPEG品質を調整してファイルサイズを制限（非同期処理でUIブロック回避）
+        const compressWithQuality = async (currentQuality: number): Promise<string> => {
+          return new Promise(resolve => {
+            // requestAnimationFrameでメインスレッドをブロックしないように
+            requestAnimationFrame(() => {
+              const data = canvas.toDataURL('image/jpeg', currentQuality);
+              const maxSize = maxSizeKB * 1024 * 4/3;
+              
+              if (data.length <= maxSize || currentQuality <= 0.3) {
+                resolve(data);
+              } else {
+                // 次の品質レベルで再帰的に処理
+                compressWithQuality(currentQuality - 0.1).then(resolve);
+              }
+            });
+          });
         };
         
-        const compressedData = compressWithQuality(0.9);
-        resolve(compressedData);
+        compressWithQuality(0.9).then(resolve);
       };
       img.src = imageData;
     });
@@ -165,7 +170,7 @@ export class OpenAIOcrService {
     onProgress?: (progress: number, message: string) => void
   ): Promise<OcrResult> {
     try {
-      onProgress?.(10, '画像を準備中...');
+      onProgress?.(5, '画像を準備中...');
       
       // 画像データの形式を確認・変換
       const processedImageData = imageData.startsWith('data:image/') 
@@ -173,10 +178,11 @@ export class OpenAIOcrService {
         : `data:image/jpeg;base64,${imageData}`;
 
       // 画像を圧縮
-      onProgress?.(20, '画像を最適化中...');
+      onProgress?.(15, '画像を最適化中...');
       const compressedImage = await this.compressImage(processedImageData);
       
-      onProgress?.(30, 'OpenAI APIに接続中...');
+      onProgress?.(25, 'OpenAI APIに接続中...');
+      onProgress?.(35, 'リクエストを送信中...');
       
       // ユーザー指定のモデルを使用
       const requestBody = {
@@ -203,7 +209,7 @@ export class OpenAIOcrService {
         temperature: 0.1, // 低い温度で安定した結果を得る
       };
 
-      onProgress?.(50, '文字認識を実行中...');
+      onProgress?.(45, '手書き文字を解析中...');
 
       // OpenAI APIへのリクエスト
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -215,7 +221,8 @@ export class OpenAIOcrService {
         body: JSON.stringify(requestBody),
       });
 
-      onProgress?.(80, 'レスポンスを処理中...');
+      onProgress?.(75, 'AIが文字を認識中...');
+      onProgress?.(85, 'データを構造化中...');
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
