@@ -456,6 +456,25 @@ const ConfirmationPage: React.FC = () => {
     setHasChanges(true);
   };
 
+  // 包装作業記録の指定位置への追加
+  const addPackagingRecordAtPosition = (position: number) => {
+    const newRecord: PackagingRecord = {
+      氏名: '',
+      開始時刻: '8:00',
+      終了時刻: '17:00',
+      時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
+      休憩: { 昼休み: true, 中休み: false },
+      生産数: '0',
+    };
+    const newRecords = [...editedData.包装作業記録];
+    newRecords.splice(position, 0, newRecord);
+    setEditedData({
+      ...editedData,
+      包装作業記録: newRecords,
+    });
+    setHasChanges(true);
+  };
+
   // 機械操作記録の更新
   const updateMachineRecord = (index: number, field: keyof MachineOperationRecord, value: any) => {
     const newRecords = [...editedData.機械操作記録];
@@ -572,6 +591,40 @@ const ConfirmationPage: React.FC = () => {
     setEditedData({
       ...editedData,
       機械操作記録: [newRecord, ...editedData.機械操作記録],
+    });
+    setHasChanges(true);
+  };
+
+  // 機械操作記録の指定位置への追加
+  const addMachineRecordAtPosition = (position: number) => {
+    let newRecord: MachineOperationRecord;
+    
+    // 既存の機械操作記録がある場合は、最初のレコードをベースにコピー
+    if (editedData.機械操作記録.length > 0) {
+      const firstRecord = editedData.機械操作記録[0];
+      newRecord = {
+        ...firstRecord, // 全ての情報をコピー
+        氏名: '', // 氏名のみ空白に設定
+        nameConfirmationStatus: 'pending' as ConfirmationStatus // 確認状態をpendingに設定
+      };
+    } else {
+      // 機械操作記録が空の場合はデフォルト値を使用
+      newRecord = {
+        氏名: '',
+        開始時刻: '8:00',
+        終了時刻: '17:00',
+        時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
+        休憩: { 昼休み: false, 中休み: false },
+        生産数: '0',
+        nameConfirmationStatus: 'pending' as ConfirmationStatus
+      };
+    }
+    
+    const newRecords = [...editedData.機械操作記録];
+    newRecords.splice(position, 0, newRecord);
+    setEditedData({
+      ...editedData,
+      機械操作記録: newRecords,
     });
     setHasChanges(true);
   };
@@ -1043,18 +1096,44 @@ const ConfirmationPage: React.FC = () => {
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {editedData.包装作業記録.map((worker, index) => (
-              <Box
-                key={index}
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: index % 2 === 0 ? 'background.default' : 'grey.50',
-                  borderTop: index > 0 ? '2px solid' : 'none',
-                  borderTopColor: 'primary.main',
-                }}
-              >
+              <React.Fragment key={index}>
+                {/* 各従業員記録の間に追加ボタンを配置（最初以外） */}
+                {index > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<PersonAdd />}
+                      onClick={() => addPackagingRecordAtPosition(index)}
+                      sx={{ 
+                        minHeight: '36px', 
+                        fontSize: '13px',
+                        borderStyle: 'dashed',
+                        borderColor: 'primary.main',
+                        color: 'primary.main',
+                        backgroundColor: 'background.paper',
+                        '&:hover': {
+                          backgroundColor: 'primary.50',
+                          borderStyle: 'solid',
+                        }
+                      }}
+                    >
+                      追加
+                    </Button>
+                  </Box>
+                )}
+                
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: index % 2 === 0 ? 'background.default' : 'grey.50',
+                    borderTop: index > 0 ? '2px solid' : 'none',
+                    borderTopColor: 'primary.main',
+                  }}
+                >
                 {/* 1行目：氏名とOK/確認ボタンを横並び */}
                 <Box sx={{ mb: 1 }}>
                   <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
@@ -1363,7 +1442,34 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 </Box>
               </Box>
+              </React.Fragment>
             ))}
+            
+            {/* 最後に追加ボタンを配置 */}
+            {editedData.包装作業記録.length > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PersonAdd />}
+                  onClick={() => addPackagingRecordAtPosition(editedData.包装作業記録.length)}
+                  sx={{ 
+                    minHeight: '36px', 
+                    fontSize: '13px',
+                    borderStyle: 'dashed',
+                    borderColor: 'primary.main',
+                    color: 'primary.main',
+                    backgroundColor: 'background.paper',
+                    '&:hover': {
+                      backgroundColor: 'primary.50',
+                      borderStyle: 'solid',
+                    }
+                  }}
+                >
+                  追加
+                </Button>
+              </Box>
+            )}
           </Box>
         </CardContent>
       </Card>
@@ -1387,18 +1493,44 @@ const ConfirmationPage: React.FC = () => {
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {editedData.機械操作記録.map((operation, index) => (
-              <Box
-                key={index}
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: index % 2 === 0 ? 'background.default' : 'grey.50',
-                  borderTop: index > 0 ? '2px solid' : 'none',
-                  borderTopColor: 'primary.main',
-                }}
-              >
+              <React.Fragment key={index}>
+                {/* 各従業員記録の間に追加ボタンを配置（最初以外） */}
+                {index > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<PersonAdd />}
+                      onClick={() => addMachineRecordAtPosition(index)}
+                      sx={{ 
+                        minHeight: '36px', 
+                        fontSize: '13px',
+                        borderStyle: 'dashed',
+                        borderColor: 'primary.main',
+                        color: 'primary.main',
+                        backgroundColor: 'background.paper',
+                        '&:hover': {
+                          backgroundColor: 'primary.50',
+                          borderStyle: 'solid',
+                        }
+                      }}
+                    >
+                      追加
+                    </Button>
+                  </Box>
+                )}
+                
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: index % 2 === 0 ? 'background.default' : 'grey.50',
+                    borderTop: index > 0 ? '2px solid' : 'none',
+                    borderTopColor: 'primary.main',
+                  }}
+                >
                 {/* 1行目：氏名とOK/確認ボタンを横並び */}
                 <Box sx={{ mb: 1 }}>
                   <Typography variant="caption" sx={{ fontSize: '13px', fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}>
@@ -1707,7 +1839,34 @@ const ConfirmationPage: React.FC = () => {
                   </Box>
                 </Box>
               </Box>
+              </React.Fragment>
             ))}
+            
+            {/* 最後に追加ボタンを配置 */}
+            {editedData.機械操作記録.length > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PersonAdd />}
+                  onClick={() => addMachineRecordAtPosition(editedData.機械操作記録.length)}
+                  sx={{ 
+                    minHeight: '36px', 
+                    fontSize: '13px',
+                    borderStyle: 'dashed',
+                    borderColor: 'primary.main',
+                    color: 'primary.main',
+                    backgroundColor: 'background.paper',
+                    '&:hover': {
+                      backgroundColor: 'primary.50',
+                      borderStyle: 'solid',
+                    }
+                  }}
+                >
+                  追加
+                </Button>
+              </Box>
+            )}
           </Box>
         </CardContent>
       </Card>
