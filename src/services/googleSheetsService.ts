@@ -376,7 +376,6 @@ export class GoogleSheetsService {
       });
 
       if (!masterDataResponse.ok) {
-        const errorText = await masterDataResponse.text();
         log.error('API エラーレスポンス', { status: masterDataResponse.status, statusText: masterDataResponse.statusText });
         throw new Error(`マスターデータの取得に失敗しました: ${masterDataResponse.status} ${masterDataResponse.statusText}`);
       }

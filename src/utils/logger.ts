@@ -55,7 +55,7 @@ class Logger {
     return levels[level] >= levels[this.config.level];
   }
 
-  private formatMessage(level: LogLevel, message: string, ...args: any[]): [string, ...any[]] {
+  private formatMessage(_level: LogLevel, message: string, ...args: any[]): [string, ...any[]] {
     let formattedMessage = message;
     
     if (this.config.enableTimestamp) {

@@ -1,3 +1,4 @@
+// @ts-ignore: React is needed for JSX
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Box, Card, CardContent, Typography, Button, Alert } from '@mui/material';
 import { log } from '@/utils/logger';

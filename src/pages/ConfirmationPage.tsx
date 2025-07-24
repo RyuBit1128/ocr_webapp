@@ -13,12 +13,28 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Alert,
-  AlertTitle,
+  IconButton,
+  CircularProgress,
 } from '@mui/material';
-import { Check, Edit, PlayArrow, ErrorOutline, Refresh, CloudOff, Lock, Wifi } from '@mui/icons-material';
-import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus, MasterDataError } from '@/types';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs, { Dayjs } from 'dayjs';
+import 'dayjs/locale/ja';
+import {
+  Check,
+  Edit,
+  HelpOutline,
+  PersonAdd,
+  Add,
+  Delete,
+  ArrowBack,
+  Save,
+  Warning,
+} from '@mui/icons-material';
+import { OcrResult, PackagingRecord, MachineOperationRecord, ConfirmationStatus } from '@/types';
 import { useAppStore } from '@/stores/appStore';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
 import { useMasterData } from '@/hooks/useMasterData';
