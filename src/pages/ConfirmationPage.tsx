@@ -441,14 +441,29 @@ const ConfirmationPage: React.FC = () => {
 
   // 包装作業記録の追加
   const addPackagingRecord = () => {
-    const newRecord: PackagingRecord = {
-      氏名: '',
-      開始時刻: '8:00',
-      終了時刻: '17:00',
-      時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
-      休憩: { 昼休み: true, 中休み: false },
-      生産数: '0',
-    };
+    let newRecord: PackagingRecord;
+    
+    // 既存の包装作業記録がある場合は、最初のレコードをベースにコピー
+    if (editedData.包装作業記録.length > 0) {
+      const firstRecord = editedData.包装作業記録[0];
+      newRecord = {
+        ...firstRecord, // 全ての情報をコピー
+        氏名: '', // 氏名のみ空白に設定
+        nameConfirmationStatus: 'pending' as ConfirmationStatus // 確認状態をpendingに設定
+      };
+    } else {
+      // 包装作業記録が空の場合はデフォルト値を使用
+      newRecord = {
+        氏名: '',
+        開始時刻: '8:00',
+        終了時刻: '17:00',
+        時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
+        休憩: { 昼休み: true, 中休み: false },
+        生産数: '0',
+        nameConfirmationStatus: 'pending' as ConfirmationStatus
+      };
+    }
+    
     setEditedData({
       ...editedData,
       包装作業記録: [newRecord, ...editedData.包装作業記録],
@@ -458,14 +473,29 @@ const ConfirmationPage: React.FC = () => {
 
   // 包装作業記録の指定位置への追加
   const addPackagingRecordAtPosition = (position: number) => {
-    const newRecord: PackagingRecord = {
-      氏名: '',
-      開始時刻: '8:00',
-      終了時刻: '17:00',
-      時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
-      休憩: { 昼休み: true, 中休み: false },
-      生産数: '0',
-    };
+    let newRecord: PackagingRecord;
+    
+    // 既存の包装作業記録がある場合は、最初のレコードをベースにコピー
+    if (editedData.包装作業記録.length > 0) {
+      const firstRecord = editedData.包装作業記録[0];
+      newRecord = {
+        ...firstRecord, // 全ての情報をコピー
+        氏名: '', // 氏名のみ空白に設定
+        nameConfirmationStatus: 'pending' as ConfirmationStatus // 確認状態をpendingに設定
+      };
+    } else {
+      // 包装作業記録が空の場合はデフォルト値を使用
+      newRecord = {
+        氏名: '',
+        開始時刻: '8:00',
+        終了時刻: '17:00',
+        時刻リスト: [{ 開始時刻: '8:00', 終了時刻: '17:00' }],
+        休憩: { 昼休み: true, 中休み: false },
+        生産数: '0',
+        nameConfirmationStatus: 'pending' as ConfirmationStatus
+      };
+    }
+    
     const newRecords = [...editedData.包装作業記録];
     newRecords.splice(position, 0, newRecord);
     setEditedData({
@@ -1250,25 +1280,23 @@ const ConfirmationPage: React.FC = () => {
                           variant="contained"
                           color="warning"
                           size="small"
-                          startIcon={<HelpOutline />}
                           onClick={() => openConfirmPopup('packaging', worker.氏名, index)}
                           sx={{ minWidth: '60px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
-                          確認
+                          修正
                         </Button>
                       ) : (
                         <Button
                           variant="contained"
                           color="success"
                           size="small"
-                          startIcon={<Check />}
                           onClick={() => {
                             updatePackagingNameConfirmationStatus(index, 'editing');
                             setAutoOpenDropdowns(new Set([`packaging-${index}`]));
                           }}
                           sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
-                          OK
+                          変更
                         </Button>
                       )}
                     </Box>
@@ -1647,25 +1675,23 @@ const ConfirmationPage: React.FC = () => {
                           variant="contained"
                           color="warning"
                           size="small"
-                          startIcon={<HelpOutline />}
                           onClick={() => openConfirmPopup('machine', operation.氏名, index)}
                           sx={{ minWidth: '60px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
-                          確認
+                          修正
                         </Button>
                       ) : (
                         <Button
                           variant="contained"
                           color="success"
                           size="small"
-                          startIcon={<Check />}
                           onClick={() => {
                             updateMachineNameConfirmationStatus(index, 'editing');
                             setAutoOpenDropdowns(new Set([`machine-${index}`]));
                           }}
                           sx={{ minWidth: '50px', fontSize: '11px', whiteSpace: 'nowrap' }}
                         >
-                          OK
+                          変更
                         </Button>
                       )}
                     </Box>
