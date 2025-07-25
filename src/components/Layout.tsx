@@ -17,6 +17,7 @@ import {
   ListItemText,
   Avatar,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import { 
   CameraAlt, 
@@ -27,6 +28,7 @@ import {
   Logout,
   Settings,
   Person,
+  CloudSync,
 } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
@@ -47,6 +49,7 @@ const steps = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { currentStep, error, success, setError, setSuccess } = useAppStore();
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const [isUpdatingMasterData, setIsUpdatingMasterData] = useState(false);
 
   const handleCloseError = () => {
     setError(null);
@@ -110,6 +113,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     handleUserMenuClose();
   };
 
+  const handleUpdateMasterData = async () => {
+    setIsUpdatingMasterData(true);
+    handleUserMenuClose();
+    
+    try {
+      console.log('🔄 マスターデータの更新を開始します');
+      
+      // キャッシュをクリア
+      const { MasterDataCache } = await import('@/services/masterDataCache');
+      MasterDataCache.clearCache();
+      console.log('✅ キャッシュをクリアしました');
+      
+      // 最新のマスターデータを取得
+      await GoogleSheetsService.getMasterData();
+      
+      setSuccess('✅ マスターデータを更新しました！\n従業員・商品リストが最新になります。');
+      console.log('✅ マスターデータ更新完了');
+      
+    } catch (error) {
+      console.error('❌ マスターデータ更新エラー:', error);
+      const errorMessage = error instanceof Error ? error.message : 'マスターデータの更新に失敗しました';
+      setError({ message: errorMessage, type: 'MASTER_DATA_ERROR' });
+    } finally {
+      setIsUpdatingMasterData(false);
+    }
+  };
+
   // 認証状態を確認
   const isAuthenticated = !!localStorage.getItem('google_access_token');
 
@@ -166,6 +196,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <Settings fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="再認証" />
+              </MenuItem>
+            )}
+            
+            {isAuthenticated && (
+              <MenuItem onClick={handleUpdateMasterData} disabled={isUpdatingMasterData}>
+                <ListItemIcon>
+                  {isUpdatingMasterData ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <CloudSync fontSize="small" />
+                  )}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={isUpdatingMasterData ? "更新中..." : "データ更新"} 
+                  secondary="従業員・商品情報"
+                />
               </MenuItem>
             )}
             
