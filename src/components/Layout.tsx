@@ -86,8 +86,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         console.log('🔓 ログアウト完了');
         
-        // ページを再読み込みして初期状態に戻す
-        window.location.reload();
+        // PWA対応：より確実な初期化のため明示的にURLリダイレクト
+        setTimeout(() => {
+          window.location.href = window.location.origin + '/ocr_0714_V2/';
+        }, 100);
         
       } catch (error) {
         console.error('❌ ログアウトエラー:', error);
