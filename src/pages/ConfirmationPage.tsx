@@ -61,6 +61,9 @@ const ConfirmationPage: React.FC = () => {
     index?: number;
     value: string;
   } | null>(null);
+  
+  // 既存データがある作業者リスト
+  const [existingWorkersList, setExistingWorkersList] = useState<string[]>([]);
 
   // マスターデータエラーダイアログ用の状態
   const [masterDataErrorDialogOpen, setMasterDataErrorDialogOpen] = useState(false);
@@ -852,6 +855,7 @@ const ConfirmationPage: React.FC = () => {
           .map(([workerName, _]) => workerName);
         
         console.log(`📋 既存データがある作業者: ${existingWorkers.join(', ')}`);
+        setExistingWorkersList(existingWorkers);
         setOverwriteCallback(() => performSave);
         setConfirmDialogOpen(true);
         setIsSaving(false);
@@ -2026,9 +2030,20 @@ const ConfirmationPage: React.FC = () => {
           既存のデータを上書きしますか？
         </DialogTitle>
         <DialogContent>
-          <DialogContentText id="overwrite-dialog-description">
+          <DialogContentText id="overwrite-dialog-description" component="div">
             {editedData?.ヘッダー?.作業日} の日付で、既にデータが記録されている作業者がいます。
             <br />
+            <br />
+            <Box sx={{ 
+              bgcolor: 'warning.light', 
+              p: 2, 
+              borderRadius: 1, 
+              mb: 2,
+              color: 'warning.dark',
+              fontWeight: 'bold'
+            }}>
+              対象作業者: {existingWorkersList.join('、')}
+            </Box>
             既存のデータに上書きしてもよろしいですか？
           </DialogContentText>
         </DialogContent>
