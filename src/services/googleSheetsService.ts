@@ -1201,7 +1201,7 @@ export class GoogleSheetsService {
     }
 
     console.log(`📊 複数区間の連続労働時間計算:`);
-    console.log(`  元区間: ${sortedSlots.map(slot => `${slot.開始時刻}-${slot.終了時刻}`).join(', ')}`);
+    console.log(`  包装作業: ${sortedSlots.map(slot => `${slot.開始時刻}-${slot.終了時刻}`).join(', ')}`);
 
     // 最初の開始時刻
     const startTime = sortedSlots[0].開始時刻;
@@ -1261,14 +1261,14 @@ export class GoogleSheetsService {
       const timeSlots = packagingRecord.時刻リスト.map((slot: any) => 
         `${slot.開始時刻}-${slot.終了時刻}`
       ).join(', ');
-      remarks.push(`元区間: ${timeSlots}`);
+      remarks.push(`包装作業: ${timeSlots}`);
     }
     
     if (machineRecord?.時刻リスト && machineRecord.時刻リスト.length > 1) {
       const timeSlots = machineRecord.時刻リスト.map((slot: any) => 
         `${slot.開始時刻}-${slot.終了時刻}`
       ).join(', ');
-      remarks.push(`機械区間: ${timeSlots}`);
+      remarks.push(`機械操作: ${timeSlots}`);
     }
     
     return remarks.join(' | ');
