@@ -185,7 +185,7 @@ export class GoogleSheetsService {
       const expiresIn = params.get('expires_in');
       const state = params.get('state');
 
-      if (accessToken && state === 'auth_redirect') {
+      if (accessToken && (state === 'auth_redirect' || state === 'auth_redirect_pwa')) {
         this.accessToken = accessToken;
         const expiresInSeconds = expiresIn ? parseInt(expiresIn, 10) : 3600;
         this.saveTokenToStorage(accessToken, expiresInSeconds);
@@ -197,6 +197,16 @@ export class GoogleSheetsService {
         
         // 認証成功後にトークン監視を開始/リセット
         TokenExpiryService.resetMonitoring();
+        
+        // PWA認証の場合、親ウィンドウに成功を通知
+        if (state === 'auth_redirect_pwa' && window.opener) {
+          try {
+            window.opener.postMessage({ type: 'auth_success' }, window.location.origin);
+            window.close();
+          } catch (error) {
+            console.warn('親ウィンドウへの通知に失敗:', error);
+          }
+        }
         
         return true;
       }

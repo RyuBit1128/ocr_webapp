@@ -6,6 +6,7 @@ import { theme } from '@/theme/theme';
 import Layout from '@/components/Layout';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import AuthRenewalDialog from '@/components/AuthRenewalDialog';
+import AuthGuard from '@/components/AuthGuard';
 import CameraPage from '@/pages/CameraPage';
 import ProcessingPage from '@/pages/ProcessingPage';
 import ConfirmationPage from '@/pages/ConfirmationPage';
@@ -65,13 +66,15 @@ function App() {
         <CssBaseline />
         <Router basename="/ocr_0714_V2">
           <Layout>
-            <Routes>
-              <Route path="/" element={<CameraPage />} />
-              <Route path="/camera" element={<CameraPage />} />
-              <Route path="/processing" element={<ProcessingPage />} />
-              <Route path="/confirmation" element={<ConfirmationPage />} />
-              <Route path="/success" element={<SuccessPage />} />
-            </Routes>
+            <AuthGuard>
+              <Routes>
+                <Route path="/" element={<CameraPage />} />
+                <Route path="/camera" element={<CameraPage />} />
+                <Route path="/processing" element={<ProcessingPage />} />
+                <Route path="/confirmation" element={<ConfirmationPage />} />
+                <Route path="/success" element={<SuccessPage />} />
+              </Routes>
+            </AuthGuard>
           </Layout>
           {/* 認証更新ダイアログ */}
           <AuthRenewalDialog />
