@@ -29,6 +29,7 @@ import {
   Settings,
   Person,
   CloudSync,
+  TableChart,
 } from '@mui/icons-material';
 import { useAppStore } from '@/stores/appStore';
 import { GoogleSheetsService } from '@/services/googleSheetsService';
@@ -143,6 +144,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
+  const handleOpenMasterSheet = () => {
+    try {
+      console.log('📊 管理シートを開きます');
+      const spreadsheetId = import.meta.env.VITE_SPREADSHEET_ID;
+      
+      if (spreadsheetId) {
+        // 管理シートに直接アクセスするURL（gid=0は最初のシート）
+        const masterSheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0`;
+        window.open(masterSheetUrl, '_blank', 'noopener,noreferrer');
+        console.log('✅ 管理シートを新しいタブで開きました');
+      } else {
+        setError({ message: 'スプレッドシートIDが設定されていません', type: 'MASTER_DATA_ERROR' });
+      }
+    } catch (error) {
+      console.error('❌ 管理シート表示エラー:', error);
+      setError({ message: '管理シートの表示に失敗しました', type: 'MASTER_DATA_ERROR' });
+    }
+    handleUserMenuClose();
+  };
+
   // 認証状態を確認
   const isAuthenticated = !!localStorage.getItem('google_access_token');
 
@@ -199,6 +220,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <Settings fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="再認証" />
+              </MenuItem>
+            )}
+            
+            {isAuthenticated && (
+              <MenuItem onClick={handleOpenMasterSheet}>
+                <ListItemIcon>
+                  <TableChart fontSize="small" />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="管理シート" 
+                  secondary="従業員・商品の編集"
+                />
               </MenuItem>
             )}
             
