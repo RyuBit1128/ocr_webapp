@@ -193,6 +193,20 @@ const ConfirmationPage: React.FC = () => {
     }
   }, [masterDataError]);
 
+  // マスターデータ更新イベントを監視
+  useEffect(() => {
+    const handleMasterDataUpdate = () => {
+      console.log('🔄 マスターデータ更新イベントを受信 - ドロップダウンリストを更新します');
+      refetchMasterData();
+    };
+
+    window.addEventListener('masterDataUpdated', handleMasterDataUpdate);
+    
+    return () => {
+      window.removeEventListener('masterDataUpdated', handleMasterDataUpdate);
+    };
+  }, [refetchMasterData]);
+
   // マスターデータが読み込まれた時にエラーフラグをクリア
   useEffect(() => {
     if (!editedData || !masterData || masterDataLoading) return;

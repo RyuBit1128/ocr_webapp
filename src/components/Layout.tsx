@@ -131,6 +131,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       setSuccess('✅ マスターデータを更新しました！\n従業員・商品リストが最新になります。');
       console.log('✅ マスターデータ更新完了');
       
+      // ConfirmationPageが表示されている場合、ドロップダウンリストを即座に更新
+      window.dispatchEvent(new CustomEvent('masterDataUpdated'));
+      
     } catch (error) {
       console.error('❌ マスターデータ更新エラー:', error);
       const errorMessage = error instanceof Error ? error.message : 'マスターデータの更新に失敗しました';
