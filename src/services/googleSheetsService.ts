@@ -1041,7 +1041,7 @@ export class GoogleSheetsService {
     ocrResult: OcrResult, 
     packagingRecord: any, 
     machineRecord: any, 
-    workDate: string
+    _workDate: string
   ): (string | number)[] {
     console.log(`📋 新規行データを作成`);
     const rowData: (string | number)[] = new Array(16).fill('');
