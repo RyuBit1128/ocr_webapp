@@ -90,11 +90,17 @@ export class DataCorrectionService {
           correctedHeader.originalProductName = header.商品名;
         }
         
-        // 信頼度が低い場合はエラーフラグを設定
-        if (productMatch.confidence < 0.4) {
+        // 信頼度が低い場合、またはマスターデータに存在しない場合はエラーフラグを設定
+        if (productMatch.confidence < 0.4 || !products.includes(productMatch.match)) {
           correctedHeader.productError = true;
         }
+      } else {
+        // マッチする商品が見つからない場合もエラーフラグを設定
+        correctedHeader.productError = true;
       }
+    } else {
+      // 商品名が空の場合もエラーフラグを設定
+      correctedHeader.productError = true;
     }
     
     return correctedHeader;
