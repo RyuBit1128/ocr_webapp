@@ -681,6 +681,17 @@ export class GoogleSheetsService {
     } catch (error) {
       console.error('❌ 個人シート保存エラー:', error);
       
+      // エラーの詳細情報をログ出力
+      if (error instanceof Error) {
+        console.error('エラー詳細:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      } else {
+        console.error('非Errorオブジェクト:', error);
+      }
+      
       // API制限エラーの場合は明確なメッセージを表示
       if (error instanceof Error) {
         if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('quota')) {
@@ -689,9 +700,20 @@ export class GoogleSheetsService {
         if (error.message.includes('403') && error.message.includes('RESOURCE_EXHAUSTED')) {
           throw new Error('APIの同時実行制限に達しました。少し時間をおいてから再度お試しください。');
         }
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          throw new Error('Google認証が無効です。再度ログインしてください。');
+        }
+        if (error.message.includes('404') || error.message.includes('Not Found')) {
+          throw new Error('スプレッドシートまたは個人シートが見つかりません。管理者に確認してください。');
+        }
         if (error.message.includes('network') || error.message.includes('fetch')) {
           throw new Error('ネットワークエラーが発生しました。インターネット接続を確認してください。');
         }
+        
+        // より具体的なエラーメッセージを表示（開発環境では詳細も表示）
+        const isDev = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === 'true';
+        const detailMessage = isDev ? `\n\n詳細: ${error.message}` : '';
+        throw new Error(`データの保存に失敗しました。しばらく待ってから再度お試しください。${detailMessage}`);
       }
       
       throw new Error('データの保存に失敗しました。しばらく待ってから再度お試しください。');
