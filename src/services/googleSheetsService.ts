@@ -350,7 +350,13 @@ export class GoogleSheetsService {
   private static async ensureAuthenticated(): Promise<void> {
     const isValid = await this.validateToken();
     if (!isValid) {
-      // 認証が無効な場合、自動的にGoogleログイン画面にリダイレクト
+      // AuthGuardが存在する場合は自動リダイレクトを無効にする
+      const hasAuthGuard = document.querySelector('[data-auth-guard]') !== null;
+      if (hasAuthGuard) {
+        throw new Error('認証が必要です。ログインしてください。');
+      }
+      
+      // AuthGuardがない場合のみ自動リダイレクト（後方互換性）
       console.log('🔄 認証が無効です。Googleログイン画面にリダイレクトします...');
       await this.authenticate();
       // この時点でページがリダイレクトされるため、以下の行には到達しない

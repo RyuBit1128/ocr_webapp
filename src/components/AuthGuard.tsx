@@ -224,7 +224,7 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   }
 
   // 認証済みの場合は子コンポーネントを表示
-  return <>{children}</>;
+  return <div data-auth-guard>{children}</div>;
 };
 
 export default AuthGuard;
