@@ -132,7 +132,6 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         authUrl.searchParams.set('state', 'auth_redirect_pwa');
         
         // デバイス別のUser-Agent情報を追加
-        const deviceType = getDeviceType();
         const userAgent = getDeviceUserAgent();
         authUrl.searchParams.set('user_agent', userAgent);
         authUrl.searchParams.set('device_type', deviceType);
