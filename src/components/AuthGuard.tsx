@@ -23,13 +23,11 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 
   // デバイス検出
   const getDeviceType = () => {
-    const userAgent = navigator.userAgent;
-    
-    if (/iPhone/.test(userAgent)) {
+    if (/iPhone/.test(navigator.userAgent)) {
       return 'iphone';
-    } else if (/iPad/.test(userAgent)) {
+    } else if (/iPad/.test(navigator.userAgent)) {
       return 'ipad';
-    } else if (/Android/.test(userAgent)) {
+    } else if (/Android/.test(navigator.userAgent)) {
       return 'android';
     } else {
       return 'desktop';
