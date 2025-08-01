@@ -21,11 +21,55 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // デバイス検出
+  const getDeviceType = () => {
+    const userAgent = navigator.userAgent;
+    
+    if (/iPhone/.test(userAgent)) {
+      return 'iphone';
+    } else if (/iPad/.test(userAgent)) {
+      return 'ipad';
+    } else if (/Android/.test(userAgent)) {
+      return 'android';
+    } else {
+      return 'desktop';
+    }
+  };
+
   // PWA環境かどうかを判定
   const isPWA = () => {
     return window.matchMedia('(display-mode: standalone)').matches ||
            (window.navigator as any).standalone ||
            document.referrer.includes('android-app://');
+  };
+
+  // デバイス別のUser-Agentを取得
+  const getDeviceUserAgent = () => {
+    const deviceType = getDeviceType();
+    
+    switch (deviceType) {
+      case 'iphone':
+        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+      case 'ipad':
+        return 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+      case 'android':
+        return 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+      default:
+        return navigator.userAgent;
+    }
+  };
+
+  // デバイス別の認証方法を選択
+  const shouldUseRedirectAuth = () => {
+    const deviceType = getDeviceType();
+    
+    // iPhone のみリダイレクト方式を強制
+    if (deviceType === 'iphone') {
+      return true;
+    }
+    
+    // iPad と Android は PWA 認証も許可
+    return !isPWA();
   };
 
   const checkAuthentication = async () => {
@@ -66,9 +110,16 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
       setIsAuthenticating(true);
       setAuthError(null);
       
-      if (isPWA()) {
-        // PWAモードの場合は新しいウィンドウで認証を開始
-        log.debug('PWAモードで認証開始');
+      const deviceType = getDeviceType();
+      log.debug('デバイス検出結果', { deviceType, isPWA: isPWA() });
+      
+      if (shouldUseRedirectAuth()) {
+        // リダイレクト方式（iPhone または通常ブラウザ）
+        log.debug('リダイレクト方式で認証開始', { deviceType });
+        await GoogleSheetsService.authenticate();
+      } else {
+        // PWAモードの場合は新しいウィンドウで認証を開始（iPad/Android）
+        log.debug('PWAモードで認証開始', { deviceType });
         const config = (GoogleSheetsService as any).getConfig();
         const redirectUri = window.location.origin + '/ocr_0714_V2/';
         
@@ -79,6 +130,12 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         authUrl.searchParams.set('response_type', 'token');
         authUrl.searchParams.set('include_granted_scopes', 'true');
         authUrl.searchParams.set('state', 'auth_redirect_pwa');
+        
+        // デバイス別のUser-Agent情報を追加
+        const deviceType = getDeviceType();
+        const userAgent = getDeviceUserAgent();
+        authUrl.searchParams.set('user_agent', userAgent);
+        authUrl.searchParams.set('device_type', deviceType);
 
         // PWAでは新しいタブで開く
         const authWindow = window.open(authUrl.toString(), '_blank');
@@ -102,11 +159,6 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
             // Cross-origin エラーは無視
           }
         }, 1000);
-
-      } else {
-        // 通常のブラウザの場合は従来のリダイレクト方式
-        log.debug('通常ブラウザで認証開始');
-        await GoogleSheetsService.authenticate();
       }
     } catch (error) {
       log.error('ログインエラー', error);
@@ -165,6 +217,9 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 
   // 未認証の場合はログイン画面を表示
   if (!isAuthenticated) {
+    const deviceType = getDeviceType();
+    const isPWAEnv = isPWA();
+    
     return (
       <Box sx={{ textAlign: 'center', mt: 4 }}>
         <Card sx={{ maxWidth: 400, mx: 'auto' }}>
@@ -184,9 +239,15 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
               Googleアカウントでログインしてください
             </Typography>
 
-            {isPWA() && (
+            {isPWAEnv && deviceType !== 'iphone' && (
               <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
                 PWAモードで動作中です。認証画面が新しいタブで開きます。
+              </Alert>
+            )}
+
+            {deviceType === 'iphone' && (
+              <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+                iPhoneではリダイレクト方式で認証を行います。
               </Alert>
             )}
 

@@ -87,12 +87,49 @@ export class GoogleSheetsService {
   }
 
   /**
+   * デバイス検出
+   */
+  private static getDeviceType(): string {
+    const userAgent = navigator.userAgent;
+    
+    if (/iPhone/.test(userAgent)) {
+      return 'iphone';
+    } else if (/iPad/.test(userAgent)) {
+      return 'ipad';
+    } else if (/Android/.test(userAgent)) {
+      return 'android';
+    } else {
+      return 'desktop';
+    }
+  }
+
+  /**
+   * デバイス別のUser-Agentを取得
+   */
+  private static getDeviceUserAgent(): string {
+    const deviceType = this.getDeviceType();
+    
+    switch (deviceType) {
+      case 'iphone':
+        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+      case 'ipad':
+        return 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+      case 'android':
+        return 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+      default:
+        return navigator.userAgent;
+    }
+  }
+
+  /**
    * Google OAuth認証を開始（リダイレクト方式）
    */
   static async authenticate(): Promise<string> {
     try {
       const config = this.getConfig();
       const redirectUri = window.location.origin + '/ocr_0714_V2/';
+      const deviceType = this.getDeviceType();
+      const userAgent = this.getDeviceUserAgent();
       
       // OAuth認証URL を構築
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -102,8 +139,13 @@ export class GoogleSheetsService {
       authUrl.searchParams.set('response_type', 'token');
       authUrl.searchParams.set('include_granted_scopes', 'true');
       authUrl.searchParams.set('state', 'auth_redirect');
+      
+      // デバイス別のUser-Agent情報を追加
+      authUrl.searchParams.set('user_agent', userAgent);
+      authUrl.searchParams.set('device_type', deviceType);
 
       console.log('🔄 リダイレクト認証を開始:', authUrl.toString());
+      console.log('📱 デバイス情報:', { deviceType, userAgent });
       
       // リダイレクトで認証開始（この時点でページが移動するため、この関数は戻らない）
       window.location.href = authUrl.toString();
@@ -257,7 +299,7 @@ export class GoogleSheetsService {
     }
 
     try {
-      const response = await fetch(
+      const response = await this.fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
@@ -1489,7 +1531,7 @@ export class GoogleSheetsService {
     try {
       await this.ensureAuthenticated();
       
-      const response = await fetch(
+      const response = await this.fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${this.getConfig().spreadsheetId}?key=${this.getConfig().googleApiKey}`,
         {
           headers: {
@@ -1505,7 +1547,7 @@ export class GoogleSheetsService {
   }
 
   /**
-   * リトライ機能付きのfetch実行
+   * リトライ機能付きのfetch実行（User-Agent付き）
    */
   private static async fetchWithRetry(
     url: string, 
@@ -1513,12 +1555,23 @@ export class GoogleSheetsService {
     maxRetries: number = 3,
     delay: number = 1000
   ): Promise<Response> {
+    // User-Agentヘッダーを追加
+    const headers = {
+      ...options.headers,
+      'User-Agent': this.getDeviceUserAgent(),
+    };
+    
+    const fetchOptions = {
+      ...options,
+      headers,
+    };
+    
     let lastError: Error | null = null;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         log.debug(`API呼び出し試行 ${attempt}/${maxRetries}`);
-        const response = await fetch(url, options);
+        const response = await fetch(url, fetchOptions);
         
         // 429 (Too Many Requests) の場合は待機してリトライ
         if (response.status === 429) {
