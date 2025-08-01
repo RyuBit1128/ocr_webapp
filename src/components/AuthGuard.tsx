@@ -51,8 +51,8 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
       return true;
     }
     
-    // iPad と Android は PWA 認証も許可
-    return !isPWA();
+    // iPad と Android は常に新しいタブでの認証を使用（警告画面スキップ）
+    return false;
   };
 
   const checkAuthentication = async () => {
