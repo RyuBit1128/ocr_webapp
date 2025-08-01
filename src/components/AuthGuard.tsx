@@ -43,21 +43,6 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
            document.referrer.includes('android-app://');
   };
 
-  // デバイス別のUser-Agentを取得
-  const getDeviceUserAgent = () => {
-    const deviceType = getDeviceType();
-    
-    switch (deviceType) {
-      case 'iphone':
-        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-      case 'ipad':
-        return 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-      case 'android':
-        return 'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-      default:
-        return navigator.userAgent;
-    }
-  };
 
   // デバイス別の認証方法を選択
   const shouldUseRedirectAuth = () => {
@@ -131,8 +116,7 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         authUrl.searchParams.set('include_granted_scopes', 'true');
         authUrl.searchParams.set('state', 'auth_redirect_pwa');
         
-        // デバイス別のUser-Agent情報はHTTPヘッダーで送信（OAuth URLには含めない）
-        const userAgent = getDeviceUserAgent();
+        // OAuth標準パラメータのみ使用（カスタムパラメータは許可されない）
 
         // PWAでは新しいタブで開く
         const authWindow = window.open(authUrl.toString(), '_blank');
