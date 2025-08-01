@@ -140,9 +140,7 @@ export class GoogleSheetsService {
       authUrl.searchParams.set('include_granted_scopes', 'true');
       authUrl.searchParams.set('state', 'auth_redirect');
       
-      // デバイス別のUser-Agent情報を追加
-      authUrl.searchParams.set('user_agent', userAgent);
-      authUrl.searchParams.set('device_type', deviceType);
+      // OAuth標準パラメータのみ使用（カスタムパラメータは許可されない）
 
       console.log('🔄 リダイレクト認証を開始:', authUrl.toString());
       console.log('📱 デバイス情報:', { deviceType, userAgent });

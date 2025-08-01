@@ -131,10 +131,8 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         authUrl.searchParams.set('include_granted_scopes', 'true');
         authUrl.searchParams.set('state', 'auth_redirect_pwa');
         
-        // デバイス別のUser-Agent情報を追加
+        // デバイス別のUser-Agent情報はHTTPヘッダーで送信（OAuth URLには含めない）
         const userAgent = getDeviceUserAgent();
-        authUrl.searchParams.set('user_agent', userAgent);
-        authUrl.searchParams.set('device_type', deviceType);
 
         // PWAでは新しいタブで開く
         const authWindow = window.open(authUrl.toString(), '_blank');
