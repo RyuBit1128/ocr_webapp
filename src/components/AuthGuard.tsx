@@ -17,6 +17,8 @@ interface AuthGuardProps {
 }
 
 const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
+  console.log('🔐 AuthGuard: Component initialized');
+  
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -104,7 +106,7 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         // PWAモードの場合は新しいウィンドウで認証を開始（iPad/Android）
         log.debug('PWAモードで認証開始', { deviceType });
         const config = (GoogleSheetsService as any).getConfig();
-        const redirectUri = window.location.origin + '/ocr_0714_V2/';
+        const redirectUri = window.location.origin + (import.meta.env.PROD ? '/ocr_webapp/' : '/');
         
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
         authUrl.searchParams.set('client_id', config.googleClientId);
