@@ -16,6 +16,18 @@ import { TokenExpiryService } from '@/services/tokenExpiryService';
 import { log } from '@/utils/logger';
 
 function App() {
+  // デバッグ用ログ
+  console.log('🚀 App component initializing...');
+  console.log('Environment:', {
+    NODE_ENV: import.meta.env.NODE_ENV,
+    PROD: import.meta.env.PROD,
+    DEV: import.meta.env.DEV,
+    BASE_URL: import.meta.env.BASE_URL,
+    VITE_DEV_MODE: import.meta.env.VITE_DEV_MODE
+  });
+  console.log('Current location:', window.location.href);
+  console.log('Router basename:', import.meta.env.PROD ? "/ocr_webapp" : "/");
+
   // アプリ起動時に認証リダイレクトをチェック
   useEffect(() => {
     try {
@@ -64,7 +76,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <Router basename="/ocr_0714_V2">
+        <Router basename={import.meta.env.PROD ? "/ocr_webapp" : "/"}>
           <Layout>
             <AuthGuard>
               <Routes>
