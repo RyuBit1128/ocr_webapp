@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
-  base: '/ocr_webapp/',
+  base: process.env.NODE_ENV === 'production' ? '/ocr_webapp/' : '/',
   plugins: [
     react(),
     VitePWA({
@@ -20,15 +20,15 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/ocr_webapp/',
+        start_url: process.env.NODE_ENV === 'production' ? '/ocr_webapp/' : '/',
         icons: [
           {
-            src: '/ocr_webapp/icon-192x192.png',
+            src: process.env.NODE_ENV === 'production' ? '/ocr_webapp/icon-192x192.png' : '/icon-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/ocr_webapp/icon-512x512.png',
+            src: process.env.NODE_ENV === 'production' ? '/ocr_webapp/icon-512x512.png' : '/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           }
