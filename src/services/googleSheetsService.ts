@@ -127,7 +127,7 @@ export class GoogleSheetsService {
   static async authenticate(): Promise<string> {
     try {
       const config = this.getConfig();
-      const redirectUri = window.location.origin + '/ocr_0714_V2/';
+      const redirectUri = window.location.origin + (import.meta.env.PROD ? '/ocr_webapp/' : '/');
       const deviceType = this.getDeviceType();
       const userAgent = this.getDeviceUserAgent();
       
