@@ -29,7 +29,7 @@
 ## プロジェクト構成
 
 ```
-ocr_0714_v2/
+ocr_webapp/
 ├── src/
 │   ├── pages/          # ページコンポーネント
 │   ├── components/     # 共通コンポーネント
@@ -49,7 +49,7 @@ ocr_0714_v2/
 1. リポジトリをクローン
 ```bash
 git clone [repository-url]
-cd ocr_0714_v2
+cd ocr_webapp
 ```
 
 2. 依存関係をインストール
